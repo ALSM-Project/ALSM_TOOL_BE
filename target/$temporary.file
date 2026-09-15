@@ -1,0 +1,133 @@
+# 1 "D:\Demo\Source\Cobol\MODEL09.cbl"  
+      *>Author:NAKAGAMI
+       IDENTIFICATION  DIVISION.
+       PROGRAM-ID.     MODEL09.
+       ENVIRONMENT DIVISION.
+      *> INPUT-OUTPUT SECTION.
+       DATA DIVISION.
+       FILE SECTION.
+       WORKING-STORAGE SECTION.
+      *>----------------------------------------------------------------*
+      *>    WORKING-STORAGE SECTION                                     *
+      *>----------------------------------------------------------------*
+       01  MODEL-NAME            PIC   X(008)  VALUE 'MODEL09'.
+       01  CNT                   PIC   9(009)  VALUE ZERO.
+       01  CNT-MAX               PIC   9(009)  VALUE 10000000.
+       01  A                     PIC   9(004)  COMP  VALUE 5.
+       01  B                     PIC   9(004)  COMP       VALUE 3.
+       01  C                     PIC   9(004)  COMP       VALUE 0.
+       01  TIME-AREA-1.
+           03 TIME-01            PIC 9(08)  VALUE ZERO.
+           03 TIME-02            PIC 9(08)  VALUE ZERO.
+           03 TIME-03            PIC 9(08)  VALUE ZERO.
+           03 TIME-04            PIC 9(08)  VALUE ZERO.
+           03 TIME-05            PIC 9(08)  VALUE ZERO.
+           03 TIME-06            PIC 9(08)  VALUE ZERO.
+           03 TIME-07            PIC 9(08)  VALUE ZERO.
+           03 TIME-08            PIC 9(08)  VALUE ZERO.
+           03 TIME-09            PIC 9(08)  VALUE ZERO.
+           03 TIME-10            PIC 9(08)  VALUE ZERO.
+           03 TIME-11            PIC 9(08)  VALUE ZERO.
+           03 TIME-12            PIC 9(08)  VALUE ZERO.
+           03 TIME-13            PIC 9(08)  VALUE ZERO.
+           03 TIME-14            PIC 9(08)  VALUE ZERO.
+           03 TIME-15            PIC 9(08)  VALUE ZERO.
+           03 TIME-16            PIC 9(08)  VALUE ZERO.
+           03 TIME-17            PIC 9(08)  VALUE ZERO.
+           03 TIME-18            PIC 9(08)  VALUE ZERO.
+           03 TIME-19            PIC 9(08)  VALUE ZERO.
+      
+       PROCEDURE DIVISION.
+      *>-------------------------------------------------------------*
+      *>    M0 : CONTROL                                             *
+      *>-------------------------------------------------------------*
+       MAIN-CONTROL.
+           DISPLAY MODEL-NAME 'STARTED'  UPON CONSOLE.
+           PERFORM CASE-0001 THRU C1-EXIT.
+           PERFORM CASE-0002 THRU C2-EXIT.
+           PERFORM CASE-0003 THRU C3-EXIT.
+           PERFORM CASE-0004 THRU C4-EXIT.
+           PERFORM CASE-0005 THRU C5-EXIT.
+           PERFORM CASE-0006 THRU C6-EXIT.
+           DISPLAY MODEL-NAME 'ENDED'  UPON CONSOLE.
+       MAIN-EXIT.
+           STOP RUN.
+      
+       CASE-0001.
+      *>    ADD
+           MOVE   0    TO  CNT.
+           ACCEPT TIME-01  FROM TIME.
+           PERFORM  UNTIL   CNT > CNT-MAX
+              ADD   A  TO B
+              ADD   1  TO CNT
+           END-PERFORM.
+           ACCEPT  TIME-02  FROM TIME.
+           COMPUTE TIME-03 = TIME-02 - TIME-01.
+           DISPLAY  'ADD      TIME = ' TIME-03 UPON CONSOLE.
+       C1-EXIT.
+           EXIT.
+       CASE-0002.
+      *>    SUBTRACT
+           MOVE   0    TO  CNT.
+           ACCEPT TIME-04  FROM TIME.
+           PERFORM  UNTIL   CNT > CNT-MAX
+              SUBTRACT   A  FROM B  GIVING C
+              ADD   1  TO CNT
+           END-PERFORM.
+           ACCEPT TIME-05  FROM TIME.
+           COMPUTE TIME-06 = TIME-05 - TIME-04.
+           DISPLAY  'SUBTRACT TIME = ' TIME-06 UPON CONSOLE.
+       C2-EXIT.
+           EXIT.
+       CASE-0003.
+      *>    MULTIPLY
+           MOVE   0    TO  CNT.
+           ACCEPT TIME-07  FROM TIME.
+           PERFORM  UNTIL   CNT > CNT-MAX
+              MULTIPLY   A  BY  B  GIVING C
+              ADD   1  TO CNT
+           END-PERFORM.
+           ACCEPT TIME-08  FROM TIME.
+           COMPUTE TIME-09 = TIME-08 - TIME-07.
+           DISPLAY  'MULTIPLY TIME = ' TIME-09 UPON CONSOLE.
+       C3-EXIT.
+           EXIT.
+       CASE-0004.
+      *>    DIVIDE
+           MOVE   0    TO  CNT.
+           ACCEPT TIME-10  FROM TIME.
+           PERFORM  UNTIL   CNT > CNT-MAX
+              DIVIDE   A  BY  B  GIVING C
+              ADD   1  TO CNT
+           END-PERFORM.
+           ACCEPT TIME-11  FROM TIME.
+           COMPUTE TIME-12 = TIME-11 - TIME-10.
+           DISPLAY 'DIVIDE   TIME = ' TIME-12 UPON CONSOLE.
+       C4-EXIT.
+           EXIT.
+       CASE-0005.
+      *>    COMPUTE
+           MOVE   0    TO  CNT.
+           ACCEPT TIME-13  FROM TIME.
+           PERFORM  UNTIL   CNT > CNT-MAX
+              COMPUTE   C  =  A + B
+              ADD   1  TO CNT
+           END-PERFORM.
+           ACCEPT TIME-14  FROM TIME.
+           COMPUTE TIME-16 = TIME-14 - TIME-13.
+           DISPLAY 'COMPUTE  TIME = ' TIME-16 UPON CONSOLE.
+       C5-EXIT.
+           EXIT.
+       CASE-0006.
+      *>    MOVE
+           MOVE   0    TO  CNT.
+           ACCEPT TIME-17  FROM TIME.
+           PERFORM  UNTIL   CNT > CNT-MAX
+              MOVE  A  TO B
+              ADD   1  TO CNT
+           END-PERFORM.
+           ACCEPT TIME-18  FROM TIME.
+           COMPUTE TIME-19 = TIME-18 - TIME-17.
+           DISPLAY 'MOVE     TIME = ' TIME-19 UPON CONSOLE.
+       C6-EXIT.
+           EXIT.

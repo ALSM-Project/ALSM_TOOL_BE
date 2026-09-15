@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Build-Jdk-Spec: 21
+Implementation-Title: akaBatch
+Implementation-Version: 1.0
+Main-Class: com.res.cobol.Main
+Created-By: Maven Integration for Eclipse
+

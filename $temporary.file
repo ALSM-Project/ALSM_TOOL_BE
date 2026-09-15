@@ -1,0 +1,674 @@
+# 1 "D:\WorkingFolder\MMC\Trial\FPT\PG\No2\ALL\AJB003.cbl"  
+       IDENTIFICATION          DIVISION.
+       PROGRAM-ID.             AJB003.
+       AUTHOR.                 KAMAGATA  (RKK)
+       DATE-WRITTEN.           93/07/19.
+      *>REMARKS *  *********************************************         
+      *>        *  *            KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｺｳｼﾝ             *         
+      *>        *  *            ( AJB003 )                     *         
+      *>        *  *********************************************.        
+      *>                                                                 
+       ENVIRONMENT             DIVISION.
+       INPUT-OUTPUT            SECTION.
+       FILE-CONTROL.
+           SELECT IS01-FIL ASSIGN      TO UT-S-IS01.
+      *>                              ; KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｾﾞﾝｼﾞﾕﾝ  (AJAL001) 
+           SELECT IS02-FIL ASSIGN      TO UT-S-IS02.
+      *>                              ; ｶｺｳ ｾｲｻﾝ ｹｲｶｸ          (AGB664)  
+           SELECT IS03-FIL ASSIGN      TO UT-S-IS03.
+      *>                              ; ｼｹﾝ ｺﾝﾎﾟｳ ｶﾀｼｷ ﾏｽﾀ     (AJAL014) 
+           SELECT OS01-FIL ASSIGN      TO UT-S-OS01.
+      *>                              ; KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ﾄｳｼﾞﾕﾝ   (AJAL001) 
+           SELECT OP01-FIL ASSIGN      TO UT-S-OP01.
+      *>                              ; ｼｹﾝ ｺﾝﾎﾟｳ ｸﾌﾞﾝ ﾌﾖ ｹﾂｶ ﾘｽﾄ        
+       DATA                    DIVISION.
+      *>                                                                 
+       FILE                    SECTION.
+      *>FD  IS01-FIL            COPY COPYFD.		(file not found)
+      *>                                    
+      *>01  IS01-REC            PIC  X(080).                             
+      *>                                                                 
+      *>FD  IS02-FIL            COPY COPYFD.		(file not found)
+      *>                                    
+      *>01  IS02-REC            PIC  X(100).                             
+      *>                                                                 
+      *>FD  IS03-FIL            COPY COPYFD.		(file not found)
+      *>                                    
+      *>01  IS03-REC            PIC  X(030).                             
+      *>                                                                 
+      *>FD  OS01-FIL            COPY COPYFD.		(file not found)
+      *>                                    
+      *>01  OS01-REC            PIC  X(080).                             
+      *>                                                                 
+      *>FD  OP01-FIL            COPY COPYFD.		(file not found)
+      *>                                    
+      *>01  OP01-REC            PIC  X(133).                             
+      *>                                                                 
+      *>*****************************************************************
+       WORKING-STORAGE         SECTION.
+      *>*****************************************************************
+       01  FILLER              PIC  X(08)          VALUE 'AJB003  '.
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA01'.
+       01  CTR-AREA.
+           05  CTR-IS01        PIC S9(08) COMP     VALUE +0.
+           05  CTR-IS02        PIC S9(08) COMP     VALUE +0.
+           05  CTR-IS03        PIC S9(08) COMP     VALUE +0.
+           05  CTR-OS01        PIC S9(08) COMP     VALUE +0.
+           05  CTR-OP01        PIC S9(08) COMP     VALUE +0.
+           05  CTR-MAX         PIC S9(02) COMP     VALUE +0.
+           05  CTR-LINE        PIC S9(04) COMP     VALUE +0.
+           05  CNT-LINE        PIC S9(04) COMP     VALUE +76.
+           05  CTR-PAGE        PIC S9(05) COMP     VALUE +0.
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA02'.
+       01  WORK-AREA.
+           05  ABCODE              PIC S9(05) COMP  SYNC.
+      *>                      ; ABEND ﾉ ｺ-ﾄﾞ                             
+           05  WK-MAX              PIC S9(07) COMP.
+      *>                      ; ｻｲﾀﾞｲ C/U ﾛﾂﾄ NO                         
+           05  WK-MIN              PIC S9(07) COMP.
+      *>                      ; ｻｲｼﾖｳ C/U ﾛﾂﾄ NO                         
+           05  IDX1                PIC S9(02) COMP.
+      *>                      ; ﾃ-ﾌﾞﾙ ﾉ ｲﾝﾃﾞﾂｸｽ                          
+           05  WK-AK01.
+               10  WK-AK011        PIC  9(02).
+               10  WK-AK012.
+                   15  WK-AK0121   PIC  9(02).
+                   15  WK-AK0122   PIC  9(02).
+                   15  WK-AK0123   PIC  9(01).
+               10  WK-AK012R  REDEFINES  WK-AK012     PIC  9(05).
+      *>                      ; ｶｸﾃｲｼﾞﾕﾝ ﾖｳ                              
+           05  WK-AA06             PIC  X(01).
+           05  WK-AA12             PIC  9(07)  COMP-3  VALUE 0.
+           05  WK-AA13             PIC  9(07)  COMP-3  VALUE 0.
+           05  WK-LOT-M            PIC  9(07)  COMP-3  VALUE 0.
+           05  WK-AN014            PIC  9(04).
+           05  WK-BD01-AA01        PIC  X(01).
+           05  WK-BD01-MSG         PIC  X(19).
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA03'.
+       01  DATE-AREA.
+           05  DATEXX.
+               10  YYX         PIC  X(02).
+               10  MMX         PIC  X(02).
+               10  DDX         PIC  X(02).
+           05  DATEYY.
+               10  HHY         PIC  X(02).
+               10  MMY         PIC  X(02).
+               10  SSY         PIC  X(02).
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA04'.
+      *>                                                                 
+       01  MSG-AREA.
+           05  WK-MSG1         PIC  X(19) VALUE 'ｼｹﾝｺﾝﾎﾟｳ ｸﾌﾞﾝ T ﾌﾖ '.
+           05  WK-MSG2         PIC  X(19) VALUE 'ｼｹﾝｺﾝﾎﾟｳ ｸﾌﾞﾝ ｻｸｼﾞﾖ'.
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA05'.
+      *>                                                                 
+       01  KEY-AREA.
+           05  KEY-IS01.
+               10  KEY-IS011.
+                   15  KEY-AA01    PIC  X(01)          VALUE SPACE.
+                   15  KEY-AA021   PIC  X(16)          VALUE SPACE.
+                   15  KEY-AA022   PIC  X(02)          VALUE SPACE.
+               10  KEY-AA03        PIC  X(02)          VALUE SPACE.
+               10  KEY-AA04        PIC  X(03)          VALUE SPACE.
+      *>                          ; KDｶﾀｼｷｶﾝﾘ ﾏｽﾀ KEY                    
+           05  KEY-OLD-IS01        PIC  X(24)          VALUE SPACE.
+           05  KEY-IS02-SUB        PIC  X(24)          VALUE SPACE.
+      *>                          ; KDｶﾀｼｷｶﾝﾘ ﾏｽﾀ KEY ﾀｲﾋ                
+           05  KEY-IS02.
+               10  KEY-RGE021      PIC  X(01)          VALUE SPACE.
+               10  KEY-RGE21       PIC  X(16)          VALUE SPACE.
+               10  KEY-RGE023      PIC  X(02)          VALUE SPACE.
+               10  KEY-RGE024      PIC  X(02)          VALUE SPACE.
+               10  KEY-RGE05       PIC  X(03)          VALUE SPACE.
+      *>                          ; ｶｺｳｾｲｻﾝｹｲｶｸ KEY                      
+           05  KEY-OLD-IS02        PIC  X(24)          VALUE SPACE.
+      *>                          ; ｶｺｳｾｲｻﾝｹｲｶｸ KEY ﾀｲﾋ                  
+           05  KEY-IS03.
+               15  KEY-AN011       PIC  X(01)          VALUE SPACE.
+               15  KEY-AN012       PIC  X(16)          VALUE SPACE.
+               15  KEY-AN013       PIC  X(02)          VALUE SPACE.
+      *>                          ; ｼｹﾝｺﾝﾎﾟｳ ｶﾀｼｷ ﾏｽﾀ KEY                
+           05  KEY-OLD-IS03        PIC  X(19)          VALUE SPACE.
+      *>                          ; ｼｹﾝｺﾝﾎﾟｳ ｶﾀｼｷ ﾏｽﾀ KEY ﾀｲﾋ            
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA06'.
+       01  TABLE-AREA.
+           05  AJAL014-TABLE   OCCURS  20.
+               10  AN01-T.
+                   15  AN01-KEY-T.
+                       20  AN011-T     PIC X(01).
+                       20  AN012-T     PIC X(16).
+                       20  AN013-T     PIC X(02).
+                   15  AN014-T         PIC 9(04).
+               10  AN02-T              PIC X(01).
+               10  AN99-T              PIC X(06).
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA07'.
+       01  HEAD01.
+           05  FILLER          PIC X(01).
+           05  FILLER          PIC X(20)  VALUE '(AJB003)            '.
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(12)  VALUE SPACE.
+      *>                                                                 
+       01  HEAD02.
+           05  FILLER          PIC X(01).
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(20)  VALUE '          ** ｶ ﾀ ｼ ｷ'.
+           05  FILLER          PIC X(20)  VALUE '  ｶ ﾝ ﾘ ﾏ ｽ ﾀ - (ｼｹﾝ'.
+           05  FILLER          PIC X(20)  VALUE 'ｺﾝﾎﾟｳｸﾌﾞﾝ ﾍﾝｺｳ) ｹ ﾂ '.
+           05  FILLER          PIC X(20)  VALUE 'ｶ ﾘ ｽ ﾄ  **         '.
+           05  HD21            PIC X(02).
+           05  FILLER          PIC X(01)  VALUE '/'.
+           05  HD22            PIC X(02).
+           05  FILLER          PIC X(01)  VALUE '/'.
+           05  HD23            PIC X(02).
+           05  FILLER          PIC X(07)  VALUE '  PAGE='.
+           05  HD24            PIC ZZZZ9.
+      *>                                                                 
+       01  HEAD03.
+           05  FILLER          PIC X(01).
+           05  HD31            PIC X(20)  VALUE '  ｶｸﾃｲ-ｼﾞﾕﾝ   ｾｲｻｸｼﾖ'.
+           05  HD32            PIC X(20)  VALUE '   ｶﾀｼｷ-ｷｺﾞｳ        '.
+           05  HD33            PIC X(20)  VALUE 'ﾗｲﾝ  ｼﾑｹﾁ    ｽﾀ-ﾄﾛﾂﾄ'.
+           05  HD34            PIC X(20)  VALUE '#  ｴﾝﾄﾞﾛﾂﾄ#  ｼﾃｲ･ﾛﾂﾄ'.
+           05  HD35            PIC X(20)  VALUE '#      <  ﾒﾂｾ-ｼﾞ    '.
+           05  HD36            PIC X(20)  VALUE '         >          '.
+           05  FILLER          PIC X(12)  VALUE SPACE.
+      *>                                                                 
+       01  HEAD04.
+           05  FILLER          PIC X(01).
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(20)  VALUE '               *****'.
+           05  FILLER          PIC X(20)  VALUE '   E N D   O F   L I'.
+           05  FILLER          PIC X(20)  VALUE ' S T   *****        '.
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(20)  VALUE SPACE.
+           05  FILLER          PIC X(12)  VALUE SPACE.
+      *>                                                                 
+       01  HEAD05.
+           05  FILLER          PIC X(01).
+           05  FILLER          PIC X(133) VALUE SPACE.
+      *>                                                                 
+       01  BD01-AREA.
+           05  FILLER          PIC X(01).
+           05  FILLER          PIC X(03).
+           05  BD01-AK0121     PIC 9(02).
+           05  BD01-WK01       PIC X(01).
+           05  BD01-AK0122     PIC Z9.
+           05  BD01-WK02       PIC X(01).
+           05  BD01-AK0123     PIC 9(01).
+           05  FILLER          PIC X(05)  VALUE SPACE.
+           05  BD01-AA01       PIC X(01).
+           05  FILLER          PIC X(07)  VALUE SPACE.
+           05  BD01-AA021      PIC X(16).
+           05  FILLER          PIC X(01)  VALUE SPACE.
+           05  BD01-AA022      PIC X(02).
+           05  FILLER          PIC X(03)  VALUE SPACE.
+           05  BD01-AA04       PIC X(03).
+           05  FILLER          PIC X(05)  VALUE SPACE.
+           05  BD01-RGE20-MIN  PIC ZZZZZZ9.
+           05  FILLER          PIC X(03)  VALUE SPACE.
+           05  BD01-RGE20-MAX  PIC ZZZZZZ9.
+           05  FILLER          PIC X(03)  VALUE SPACE.
+           05  BD01-AN014      PIC ZZZZZZ9.
+           05  FILLER          PIC X(07)  VALUE SPACE.
+           05  BD01-MSG        PIC X(19).
+           05  FILLER          PIC X(26)  VALUE SPACE.
+      *>                                                                 
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA08'.
+      *>                                                                 
+      *>01  PARM1               PIC  X(01)          VALUE SPACE.         
+       01  PARM2               INCLUDE  AJAL011.
+       01  PARM3               PIC  9(07)  COMP-3  VALUE 0.
+      *>                      ; ｶｸﾃｲﾖｸｼﾞﾕﾝ(2ｼﾞﾕﾝｶﾝ ﾀｲｵｳ)                 
+       01  PARM4               PIC  9(08)          VALUE 0.
+      *>                      ; ｶｸﾃｲｼﾞﾕﾝ ﾄﾘﾀﾞｼ ﾖｳ                        
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA09'.
+      *>                                                                 
+       01  IS01-AREA           INCLUDE  AJAL001.
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA10'.
+      *>                                                                 
+       01  IS02-AREA           INCLUDE  AGB664.
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA11'.
+      *>                                                                 
+       01  IS03-AREA           INCLUDE  AJAL014.
+      *>                                                                 
+       01  FILLER              PIC  X(08)          VALUE 'AAAAAA12'.
+      *>                                                                 
+      *>*********************************************************        
+      *>    (P00)               KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｺｳｼﾝ              *        
+      *>*********************************************************        
+       PROCEDURE               DIVISION.
+      *>                                                                 
+       P00.
+           OPEN    INPUT   IS01-FIL  IS02-FIL  IS03-FIL
+                   OUTPUT  OS01-FIL  OP01-FIL.
+      *>                                                                 
+           CALL   'SBDATE'           USING DATEXX.
+           MOVE    YYX        TO     HD21.
+           MOVE    MMX        TO     HD22.
+           MOVE    DDX        TO     HD23.
+      *>                                                                 
+           CALL   'AJA0501'   USING  PARM2 PARM3 PARM4.
+      *>                                    ; ｶｸﾃｲｼﾞﾕﾝ ﾏｽﾀ READ          
+           PERFORM  B20    THRU  B20-99.
+      *>                                    ; KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ READ         
+           IF  CTR-IS01  =  0
+               MOVE  112      TO     ABCODE
+               DISPLAY  '@@@@ AJB003 @@@@ KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｺｳｼﾝ'
+               DISPLAY  'KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ-(IS01) 0ｹﾝ'
+               CALL     'SBABEND'  USING  ABCODE  ABCODE.
+      *>                                                                 
+           IF  AK01R  NOT =  AA11
+               MOVE  111      TO     ABCODE
+               DISPLAY  '@@@@ AJB003 @@@@ KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｺｳｼﾝ'
+               DISPLAY  'ｶｸﾃｲｼﾞﾕﾝ ｱﾝﾏﾂﾁ ｶﾀｼｷｶﾝﾘﾏｽﾀ-(IS01) ' AA11
+               CALL     'SBABEND'  USING  ABCODE  ABCODE.
+      *>                                                                 
+           PERFORM   B10      THRU   B10-99.
+      *>                                    ; ｶｺｳ ｾｲｻﾝ ｹｲｶｸ READ         
+      *>                                                                 
+           MOVE      AK01R           TO  WK-AK01.
+      *>                                                                 
+           IF  CTR-IS02   =  ZERO
+               MOVE  ZERO  TO  RGE01.
+           IF  RGE01  NOT =  AK01R   AND
+               RGE01  NOT =  ZERO
+               MOVE  222      TO     ABCODE
+               DISPLAY  '@@@@ AJB003 @@@@ KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｺｳｼﾝ'
+               DISPLAY  'ｶｸﾃｲｼﾞﾕﾝ ｱﾝﾏﾂﾁ ｶｺｳｾｲｹｲ(IS02) ' RGE01
+               DISPLAY  '           ｶｸﾃｲｼﾞﾕﾝ ﾏｽﾀ-     ' WK-AK012R
+               CALL     'SBABEND'  USING  ABCODE  ABCODE.
+      *>                                                                 
+           PERFORM  B30  THRU  B30-99.
+      *>                                    ; ｼｹﾝ ｺﾝﾎﾟｳ ｶﾀｼｷ ﾏｽﾀ READ    
+           PERFORM  B40  THRU  B40-99.
+      *>                                    ; ｹﾂｶ ﾘｽﾄ ﾐﾀﾞｼ WRITE         
+           MOVE  AA01    TO    WK-BD01-AA01.
+      *>                                                                 
+           MOVE  SPACE   TO    TABLE-AREA.
+      *>                                                                 
+           PERFORM  B50  THRU  B50-99
+              UNTIL   KEY-IS01 = HIGH-VALUE.
+      *>                                    ; KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｺｳｼﾝ         
+       P99.
+           WRITE     OP01-REC           FROM   HEAD04    AFTER  2.
+      *>                                                                 
+           DISPLAY    '**********  PGM = AJB003  ****************'.
+           DISPLAY    '* (IS01) KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｾﾞﾝｼﾞﾕﾝ =' CTR-IS01 ' *'.
+           DISPLAY    '* (IS02) ｶｺｳ ｾｲｻﾝ ｹｲｶｸ         =' CTR-IS02 ' *'.
+           DISPLAY    '* (IS03) ｼｹﾝ ｺﾝﾎﾟｳ ｶﾀｼｷ ﾏｽﾀ    =' CTR-IS03 ' *'.
+           DISPLAY    '* (OS01) KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ﾄｳｼﾞﾕﾝ  =' CTR-OS01 ' *'.
+           DISPLAY    '* (OP01) ｼｹﾝ ｺﾝﾎﾟｳ ｸﾌﾞﾝ ﾌﾖ ﾘｽﾄ =' CTR-OP01 ' *'.
+           DISPLAY    '******************************************'.
+           CLOSE  IS01-FIL IS02-FIL IS03-FIL
+                  OS01-FIL OP01-FIL.
+           GOBACK.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B10)       ｶｺｳ ｾｲｻﾝ ｹｲｶｸ READ                     *         
+      *>********************************************************         
+       B10.
+           READ  IS02-FIL                  INTO IS02-AREA
+              AT END
+                 MOVE  HIGH-VALUE          TO   KEY-IS02-SUB KEY-IS02
+                 GO TO B10-99.
+           COMPUTE  CTR-IS02 =  CTR-IS02 + 1.
+           MOVE  RGE021                    TO   KEY-RGE021.
+      *>    ｷﾖｳｾｲ E/Mｶﾀｼｷ ﾃﾞ MATCHING                                    
+      *>4G1ｶｲｼﾕｳ  START                                                  
+      *>    IF    RGE021 = 'M'                                           
+           IF    RGE021 = 'M'  OR
+      *>FM2/4 UPDATE                                                     
+      *>         (RGE021 = 'U'  AND  RGE023 = ('1 ' OR 'Y '))            
+                (RGE021 = 'U'  AND
+                 RGE023 = ('1 ' OR 'Y ' OR '9 ' OR 'Z ' OR 'N ' OR
+                           '2 ' OR '3 ' OR '4 ' OR '5 ' OR '6 ' OR
+                           '8 '))
+      *>4G1ｶｲｼﾕｳ  END                                                    
+                 MOVE  RGE022              TO   KEY-RGE21
+           ELSE
+                 MOVE  RGE21               TO   KEY-RGE21.
+      *>                                                                 
+           MOVE  RGE023                    TO   KEY-RGE023.
+           MOVE  RGE024                    TO   KEY-RGE024.
+           MOVE  RGE05                     TO   KEY-RGE05.
+           MOVE  KEY-IS02                  TO   KEY-IS02-SUB.
+       B10-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B20)       KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ READ                     *         
+      *>********************************************************         
+       B20.
+           READ  IS01-FIL                  INTO IS01-AREA
+              AT END
+                 MOVE  HIGH-VALUE          TO   KEY-IS01
+                 GO TO B20-99.
+           COMPUTE  CTR-IS01 =  CTR-IS01 + 1.
+           MOVE  AA01                      TO   KEY-AA01.
+           MOVE  AA021                     TO   KEY-AA021.
+           MOVE  AA022                     TO   KEY-AA022.
+           MOVE  AA03                      TO   KEY-AA03.
+           MOVE  AA04                      TO   KEY-AA04.
+       B20-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B30)       ｼｹﾝ ｺﾝﾎﾟｳ ｶﾀｼｷ ﾏｽﾀ READ                *         
+      *>********************************************************         
+       B30.
+           READ  IS03-FIL                  INTO IS03-AREA
+              AT END
+                 MOVE  HIGH-VALUE          TO   KEY-IS03
+                 GO TO B30-99.
+           COMPUTE  CTR-IS03 =  CTR-IS03 + 1.
+           MOVE  AN011                     TO   KEY-AN011.
+           MOVE  AN012                     TO   KEY-AN012.
+           MOVE  AN013                     TO   KEY-AN013.
+       B30-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B40)       ｹﾂｶ ﾘｽﾄ ﾐﾀﾞｼ WRITE                     *         
+      *>********************************************************         
+       B40.
+           ADD       1                  TO     CTR-PAGE.
+           MOVE      CTR-PAGE           TO     HD24.
+      *>                                                                 
+           WRITE     OP01-REC           FROM   HEAD01    AFTER  PAGE.
+           WRITE     OP01-REC           FROM   HEAD02    AFTER  1.
+           WRITE     OP01-REC           FROM   HEAD03    AFTER  2.
+           WRITE     OP01-REC           FROM   HEAD05    AFTER  1.
+      *>                                                                 
+           MOVE      5                  TO     CTR-LINE.
+       B40-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B50)       KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｺｳｼﾝ                     *         
+      *>********************************************************         
+       B50.
+           MOVE  KEY-IS02-SUB  TO  KEY-IS02.
+           IF  KEY-AA03    =  SPACE
+               MOVE   SPACE   TO   KEY-RGE024.
+           IF  KEY-IS01  >  KEY-IS02
+      *>                                    ; IS02 ｵﾝﾘ-                  
+               PERFORM  B10    THRU  B10-99
+                        UNTIL  KEY-IS02  NOT <  KEY-IS01
+      *>                                    ; ｶｺｳ ｾｲｻﾝ ｹｲｶｸ READ         
+           ELSE
+           IF  KEY-IS01  <  KEY-IS02
+      *>                                    ; IS01 ｵﾝﾘ-                  
+               PERFORM  B51    THRU  B51-99
+      *>                                    ; ｶﾀｼｷｶﾝﾘﾏｽﾀ ｵﾝﾘ-ｼﾞﾉ ｼﾖﾘ     
+           ELSE
+      *>                                    ; ﾏﾂﾁﾝｸﾞ                     
+               PERFORM  B52    THRU  B52-99.
+      *>                                    ; ﾏﾂﾁﾝｸﾞ ｼﾖﾘ                 
+       B50-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B51)       ｶﾀｼｷｶﾝﾘﾏｽﾀ ｵﾝﾘ- ｼﾞ ﾉ ｼﾖﾘ               *         
+      *>********************************************************         
+       B51.
+           MOVE    AA12    TO     WK-MIN
+                                  WK-MAX.
+           MOVE    SPACE   TO     WK-BD01-MSG.
+      *>                                                                 
+           IF  AA06            NOT =   'T'
+               MOVE    'H'     TO      WK-AA06
+           ELSE
+               MOVE    AA06    TO      WK-AA06.
+      *>                                                                 
+           IF  AN01-KEY-T (1)  NOT =   KEY-IS011
+               PERFORM  B511   THRU    B511-99.
+      *>                                    ; ﾏﾂﾁﾝｸﾞ ｼﾖﾘ  (IS01:IS03)    
+           IF  WK-AA06         NOT =   'H'     AND
+               AN01-KEY-T (1)      =   KEY-IS011
+      *>                                                                 
+               PERFORM  B512   THRU    B512-99
+                        VARYING    IDX1    FROM   1  BY  1
+                        UNTIL      IDX1    >      CTR-MAX
+      *>                                    ; ｼｹﾝｺﾝﾎﾟｳｸﾌﾞﾝ ﾁｴﾂｸ ｼﾖﾘ      
+               IF  WK-AA06 NOT =   AA06
+                   PERFORM     B513    THRU    B513-99.
+      *>                                    ; ｹﾂｶ ﾘｽﾄ WRITE              
+           MOVE    KEY-IS01    TO      KEY-OLD-IS01.
+           MOVE    KEY-IS02-SUB  TO      KEY-IS02.
+      *>                                                                 
+           PERFORM  B514   THRU  B514-99
+                    UNTIL  KEY-IS01    NOT =   KEY-OLD-IS01.
+      *>                                    ; KD ｶﾀｼｷ ｶﾝﾘ ﾏｽﾀ OUTPUT     
+       B51-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B511)      ﾏﾂﾁﾝｸﾞ ｼﾖﾘ  ( IS01 : IS03 )            *         
+      *>********************************************************         
+       B511.
+           PERFORM  B30    THRU  B30-99
+                    UNTIL  KEY-IS03   NOT <  KEY-IS011.
+      *>                                    ; ｼｹﾝ ｺﾝﾎﾟｳ ｶﾀｼｷ ﾏｽﾀ ﾖﾐﾄﾊﾞｼ  
+           IF  KEY-IS011  =  KEY-IS03
+               MOVE     SPACE         TO     TABLE-AREA
+               MOVE     KEY-IS03      TO     KEY-OLD-IS03
+               MOVE     ZERO          TO     CTR-MAX
+      *>                                                                 
+               PERFORM  B5111   THRU  B5111-99
+                        VARYING IDX1  FROM   1  BY  1
+                        UNTIL  KEY-IS03  NOT =  KEY-OLD-IS03.
+      *>                                    ; IS03 ﾃ-ﾌﾞﾙ ｾﾂﾄ ｼﾖﾘ         
+       B511-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B5111)     IS03 ﾃ-ﾌﾞﾙ ｾﾂﾄ ｼﾖﾘ                     *         
+      *>********************************************************         
+       B5111.
+           IF  IDX1  >  20
+               MOVE  333             TO  ABCODE
+               DISPLAY  '@@@@ AJB003 @@@@ KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ ｺｳｼﾝ'
+               DISPLAY  'ｼｹﾝｺﾝﾎﾟｳｶﾀｼｷ ﾏｽﾀ  ﾃ-ﾌﾞﾙ 20 ｵ-ﾊﾞ-'
+               DISPLAY  'AN01-KEY = ' AN01
+               CALL     'SBABEND'  USING  ABCODE  ABCODE.
+      *>                                                                 
+           MOVE     AN01   TO  AN01-T (IDX1).
+           MOVE     AN02   TO  AN02-T (IDX1).
+           ADD      1      TO  CTR-MAX.
+      *>                                                                 
+           PERFORM  B30    THRU  B30-99.
+      *>                                    ; ｼｹﾝ ｺﾝﾎﾟｳ ｶﾀｼｷ ﾏｽﾀ READ    
+       B5111-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B512)      ｼｹﾝｺﾝﾎﾟｳｸﾌﾞﾝ ﾁｴﾂｸ ｼﾖﾘ                  *         
+      *>********************************************************         
+       B512.
+           IF  AN014-T (IDX1)    NOT <   WK-MIN      AND
+               AN014-T (IDX1)    NOT >   WK-MAX      AND
+               WK-AA06           =       SPACE
+      *>                                                                 
+               MOVE    'T'               TO    WK-AA06
+               MOVE    AN014-T (IDX1)    TO    WK-AN014
+               MOVE    WK-MSG1           TO    WK-BD01-MSG
+           ELSE
+           IF  AN014-T (IDX1)    <       WK-MIN      AND
+               WK-AA06           NOT =   SPACE
+      *>                                                                 
+               MOVE    SPACE             TO    WK-AA06
+               MOVE    AN014-T (IDX1)    TO    WK-AN014
+               MOVE    WK-MSG2           TO    WK-BD01-MSG.
+       B512-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B513)      ｹﾂｶ ﾘｽﾄ WRITE                          *         
+      *>********************************************************         
+       B513.
+           IF  WK-BD01-AA01 NOT =  AA01
+               MOVE        ZERO     TO    CTR-PAGE
+               MOVE        CNT-LINE TO    CTR-LINE
+               ADD     1            TO    CTR-LINE.
+               MOVE        AA01     TO    WK-BD01-AA01.
+      *>                                                                 
+           IF  CTR-LINE     >      CNT-LINE
+               PERFORM     B40     THRU  B40-99.
+      *>                                    ; ｹﾂｶ ﾘｽﾄ ﾐﾀﾞｼ WRITE         
+           MOVE    SPACE           TO    BD01-AREA.
+           MOVE    WK-AK0121       TO    BD01-AK0121.
+           MOVE    '/'             TO    BD01-WK01.
+           MOVE    WK-AK0122       TO    BD01-AK0122.
+           MOVE    '/'             TO    BD01-WK02.
+           MOVE    WK-AK0123       TO    BD01-AK0123.
+           MOVE    AA01            TO    BD01-AA01.
+           MOVE    AA021           TO    BD01-AA021.
+           MOVE    AA022           TO    BD01-AA022.
+           MOVE    AA04            TO    BD01-AA04.
+           MOVE    WK-MIN          TO    BD01-RGE20-MIN.
+           MOVE    WK-MAX          TO    BD01-RGE20-MAX.
+           MOVE    WK-AN014        TO    BD01-AN014.
+           MOVE    WK-BD01-MSG     TO    BD01-MSG.
+      *>                                                                 
+           WRITE   OP01-REC        FROM  BD01-AREA   AFTER  2.
+           ADD     2               TO    CTR-LINE.
+           ADD     1               TO    CTR-OP01.
+       B513-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B514)      ｶﾀｼｷｶﾝﾘﾏｽﾀ OUTPUT                      *         
+      *>********************************************************         
+       B514.
+           MOVE     WK-AA06    TO    AA06.
+           MOVE     AK01R      TO    AA09.
+           MOVE     AA12       TO    AA10.
+           MOVE     PARM3      TO    AA11.
+           MOVE     ZERO       TO    AA13.
+      *>                                                                 
+           PERFORM  B5141    THRU    B5141-99.
+      *>                                    ; ｶﾀｼｷｶﾝﾘﾏｽﾀ WRITE           
+           PERFORM  B20      THRU    B20-99.
+      *>                                    ; KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ READ         
+       B514-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B5141)     ｶﾀｼｷｶﾝﾘﾏｽﾀ WRITE                       *         
+      *>********************************************************         
+       B5141.
+           WRITE    OS01-REC     FROM     IS01-AREA.
+           COMPUTE  CTR-OS01  =  CTR-OS01 + 1.
+       B5141-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B52)       ﾏﾂﾁﾝｸﾞ ｼﾖﾘ  (IS01:IS02)                *         
+      *>********************************************************         
+       B52.
+           MOVE  -9999999                  TO  WK-MAX.
+           MOVE  9999999                   TO  WK-MIN.
+           MOVE  KEY-IS02-SUB              TO  KEY-IS02 KEY-OLD-IS02.
+           MOVE  ZERO                      TO  WK-LOT-M.
+           PERFORM  B521   THRU  B521-99
+                    UNTIL  KEY-IS02  NOT =  KEY-OLD-IS02.
+      *>                                    ; ｶｺｳｾｲｻﾝｹｲｶｸ ﾄﾞｳｲﾂｷ- ｼﾖﾘ    
+           COMPUTE  WK-AA12  =  WK-MAX  +  1.
+      *>4G1ｶｲｼﾕｳ  START                                                  
+      *>    IF  AA01     =     'M'                                       
+           IF  AA01     =     'M'  OR
+      *>FM2/4 UPDATE                                                     
+      *>    (AA01     =     'U'  AND  AA022  = ('1 ' OR 'Y '))           
+           (AA01 = 'U' AND AA022 = ('1 ' OR 'Y '
+                                         OR '9 ' OR 'Z ' OR 'N '
+                                         OR '2 ' OR '3 ' OR '4 '
+                                         OR '5 ' OR '6 ' OR '8 '))
+      *>4G1ｶｲｼﾕｳ  END                                                    
+               MOVE     WK-LOT-M    TO         WK-AA13
+           ELSE
+               COMPUTE  WK-AA13  =  WK-MAX  -  WK-MIN  +  1.
+      *>                                                                 
+           MOVE  SPACE                 TO  WK-BD01-MSG.
+      *>                                                                 
+           IF  AA06   NOT =   'T'
+               MOVE   SPACE      TO      AA06.
+      *>                                                                 
+           IF  AN01-KEY-T (1)    NOT =   KEY-IS011
+               PERFORM  B511     THRU    B511-99.
+      *>                                    ; ﾏﾂﾁﾝｸﾞ ｼﾖﾘ  (IS01:IS03)    
+           MOVE    AA06   TO     WK-AA06.
+      *>                                                                 
+           IF  AN01-KEY-T (1)    =       KEY-IS011
+               PERFORM  B512     THRU    B512-99
+                        VARYING  IDX1    FROM   1  BY  1
+                        UNTIL    IDX1    >      CTR-MAX
+      *>                                    ; ｼｹﾝｺﾝﾎﾟｳｸﾌﾞﾝ ﾁｴﾂｸ ｼﾖﾘ      
+                   IF  WK-AA06   NOT =   AA06
+                       PERFORM   B513    THRU   B513-99.
+      *>                                    ; ｹﾂｶ ﾘｽﾄ WRITE              
+           MOVE    KEY-IS01      TO      KEY-OLD-IS01.
+           MOVE    KEY-IS02-SUB  TO      KEY-IS02.
+      *>                                                                 
+           PERFORM  B522   THRU  B522-99
+                    UNTIL  KEY-IS01   NOT =   KEY-OLD-IS01.
+      *>                                    ; ｶﾀｼｷｶﾝﾘ ﾏｽﾀ WRITE ｼﾖﾘ      
+       B52-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B521)      ｶｺｳｾｲｻﾝｹｲｶｸ ﾄﾞｳｲﾂｷ- ｼﾖﾘ                *         
+      *>********************************************************         
+       B521.
+      *>4G1ｶｲｼﾕｳ  START                                                  
+      *>    IF  RGE021    =  'M'                                         
+           IF  RGE021    =  'M'  OR
+      *>FM2/4 UPDATE                                                     
+      *>    (RGE021    =  'U'  AND  RGE023 = ('1 ' OR 'Y '))             
+           (RGE021 = 'U' AND RGE023 = ('1 ' OR 'Y '
+                                            OR '9 ' OR 'Z ' OR 'N '
+                                            OR '2 ' OR '3 ' OR '4 '
+                                            OR '5 ' OR '6 ' OR '8 '))
+      *>4G1ｶｲｼﾕｳ  END                                                    
+               ADD       1                 TO   WK-LOT-M.
+           IF  RGE20  >  WK-MAX
+               MOVE   RGE20                TO   WK-MAX.
+           IF  RGE20  <  WK-MIN
+               MOVE   RGE20                TO   WK-MIN.
+           PERFORM  B10    THRU  B10-99.
+      *>                                    ; ｶｺｳ ｾｲｻﾝ ｹｲｶｸ READ         
+       B521-99.
+           EXIT.
+      *>                                                                 
+      *>********************************************************         
+      *>    (B522)      ｶﾀｼｷｶﾝﾘﾏｽﾀ WRITE ｼﾖﾘ                   *         
+      *>********************************************************         
+       B522.
+      *>                                                                 
+           MOVE      WK-AA06      TO    AA06.
+           MOVE      AK01R        TO    AA09.
+           MOVE      WK-MIN       TO    AA10.
+           MOVE      PARM3        TO    AA11.
+           MOVE      WK-AA12      TO    AA12.
+           MOVE      WK-AA13      TO    AA13.
+      *>                                    ; ｶﾀｼｷｶﾝﾘ ﾏｽﾀ ﾍﾝｼﾕｳ          
+           PERFORM   B5141  THRU  B5141-99.
+      *>                                    ; ｶﾀｼｷｶﾝﾘ ﾏｽﾀ OUTPUT         
+           PERFORM   B20    THRU  B20-99.
+      *>                                    ; KDｶﾀｼｷ ｶﾝﾘﾏｽﾀ READ         
+       B522-99.
+           EXIT.
+      *>                                                                 
+      *>*********************AJB003 END**********************************
+      
