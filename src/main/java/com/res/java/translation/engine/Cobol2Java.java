@@ -4429,7 +4429,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 					/*
 					 * if (child.getChildren() != null) { strLen =
 					 * child.getChildren().get(0).getJavaName2() + ".Length";
-					 * headerLst.add("import jp.co.fpt.batch." + child.getParent().getJavaName1() +
+					 * headerLst.add("import com.alsm.runtime.batch." + child.getParent().getJavaName1() +
 					 * "." + child.getParent().getJavaName2() + "Model." +
 					 * child.getChildren().get(0).getJavaName2()); } else {
 					 */
@@ -4495,7 +4495,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 			sourceLst.add("tab()");
 			while (e.hasMoreElements()) {
 				String key = (String) e.nextElement();
-				headerLst.add("import jp.co.fpt.batch." + key.toLowerCase() + "." +
+				headerLst.add("import com.alsm.runtime.batch." + key.toLowerCase() + "." +
 				// NameUtil.convertCobolNameToJava(key.toUpperCase(),true) +"Tasklet;");
 						key + "Tasklet;");
 				// System.out.println(key + " : " + taskletList.get(key));

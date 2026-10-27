@@ -45,6 +45,9 @@ public class SymbolUtil {
 	private String modelName =null;
 	
 	private boolean  bFlag = false;
+	// Level-01 items already written to the Model: doClassBegin runs once per 01 group and each
+	// run walks the remaining siblings again, which used to declare the same field several times.
+	private java.util.Set<String> emittedModelAttrs = new java.util.HashSet<String>();
 	private boolean isFirstRun = true;
 	
 	private String strParent;
@@ -109,6 +112,7 @@ public class SymbolUtil {
 		
 		bFlag = false;
 		isFirstRun = true;	
+		emittedModelAttrs = new java.util.HashSet<String>();
 	}
 
 	public void doClassBegin(SymbolProperties props, String name, boolean programScope) {
@@ -119,10 +123,10 @@ public class SymbolUtil {
 				headerLst.add("import org.springframework.stereotype.Component;");
 				headerLst.add("");
 				// EMT UDP 2025 
-				//headerLst.add("import jp.co.fpt.common.Constant;");
-				//headerLst.add("import jp.co.fpt.helper.StringHelper;");
+				//headerLst.add("import com.alsm.runtime.common.Constant;");
+				//headerLst.add("import com.alsm.runtime.helper.StringHelper;");
 				//
-				headerLst.add("import jp.co.fpt.common.Record;");
+				headerLst.add("import com.alsm.runtime.common.Record;");
 				classLst.add("import lombok.Getter;");
 				classLst.add("import lombok.Setter;");
 				classLst.add("");
@@ -1709,6 +1713,10 @@ public class SymbolUtil {
 			constructorsLst1.clear();
 		}
 		while (tmpSymProp != null && !tmpSymProp.getDataName().equals("RETURN-CODE") && !bFlag) {
+			if (!emittedModelAttrs.add(tmpSymProp.getDataName())) {
+				tmpSymProp = tmpSymProp.getSibling();
+				continue;
+			}
 			boolean isCopy = false;
 			if (copy_List != null) {
 				for(String[] strCopy : copy_List)
@@ -1725,7 +1733,7 @@ public class SymbolUtil {
 							modelName =  ConvertCopyName(strCopy[1]).trim();
 							
 						if (!modelNameLst.contains(modelName)) {						
-						   headerLst.add("import jp.co.fpt.common.model." + modelName + ";");
+						   headerLst.add("import com.alsm.runtime.common.model." + modelName + ";");
 						   modelNameLst.add(modelName);
 						}
 						varLst.add("private " + modelName + " " + tmpSymProp.getJavaName1() + ";");

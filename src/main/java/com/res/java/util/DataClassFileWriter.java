@@ -20,7 +20,7 @@ public class DataClassFileWriter extends ClassFileWriter {
 		printHeader(props,parent);
 		//20210703 Update E
 	}
-	//package jp.co.fpt.batch
+	//package com.alsm.runtime.batch
 	//20210703 update S
 	//public void printHeader(SymbolProperties props) {
 	public void printHeader(SymbolProperties props, SymbolProperties parent) {
