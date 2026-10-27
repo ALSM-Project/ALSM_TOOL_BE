@@ -3,8 +3,8 @@ package com.alsm.runtime.common;
 import java.sql.SQLException;
 import java.util.List;
 
-import javax.persistence.EntityManager;
-import javax.persistence.Query;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 
 import org.springframework.transaction.support.TransactionTemplate;
 
