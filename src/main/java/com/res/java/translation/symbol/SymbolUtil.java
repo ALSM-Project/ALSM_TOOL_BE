@@ -123,10 +123,10 @@ public class SymbolUtil {
 				headerLst.add("import org.springframework.stereotype.Component;");
 				headerLst.add("");
 				// EMT UDP 2025 
-				//headerLst.add("import jp.co.fpt.common.Constant;");
-				//headerLst.add("import jp.co.fpt.helper.StringHelper;");
+				//headerLst.add("import com.alsm.runtime.common.Constant;");
+				//headerLst.add("import com.alsm.runtime.helper.StringHelper;");
 				//
-				headerLst.add("import jp.co.fpt.common.Record;");
+				headerLst.add("import com.alsm.runtime.common.Record;");
 				classLst.add("import lombok.Getter;");
 				classLst.add("import lombok.Setter;");
 				classLst.add("");
@@ -1733,7 +1733,7 @@ public class SymbolUtil {
 							modelName =  ConvertCopyName(strCopy[1]).trim();
 							
 						if (!modelNameLst.contains(modelName)) {						
-						   headerLst.add("import jp.co.fpt.common.model." + modelName + ";");
+						   headerLst.add("import com.alsm.runtime.common.model." + modelName + ";");
 						   modelNameLst.add(modelName);
 						}
 						varLst.add("private " + modelName + " " + tmpSymProp.getJavaName1() + ";");

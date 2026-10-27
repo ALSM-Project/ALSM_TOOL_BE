@@ -32,7 +32,7 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 	 * Package the generated classes of a program live in (the same one their package
 	 * declarations use: the -pp program package plus the program name). Imports between the
 	 * generated tasklet, configuration and model classes must use it - they used to hardcode
-	 * com.fpt.emt.batch.jobs, which never matched the packages the files were written with.
+	 * a fixed package of their own, which never matched the packages the files were written with.
 	 */
 	private static String jobBasePackage(SymbolProperties props) {
 		String base = NameUtil.getPackageName(props, true);
@@ -108,7 +108,7 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 		println("import org.springframework.context.annotation.Bean;");
 		println("import org.springframework.context.annotation.Configuration;");
 		println("import org.springframework.transaction.PlatformTransactionManager;");
-		//println("import jp.co.fpt.config.BaseJobExecutionListener;");
+		//println("import com.alsm.runtime.config.BaseJobExecutionListener;");
 		println("");		
 		println("@Configuration ");
 		println("@EnableBatchProcessing");
@@ -251,7 +251,7 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 			headerLst.add("");
 			headerLst.add("import "+jobBasePackage(props)+".configuration."
 					+ props.getJavaName2()+"Model;");
-			headerLst.add("import jp.co.fpt.common.Console;");
+			headerLst.add("import com.alsm.runtime.common.Console;");
 			headerLst.add("import lombok.extern.slf4j.Slf4j;");
 			headerLst.add("import org.springframework.batch.core.StepContribution;");
 			headerLst.add("import org.springframework.batch.core.StepExecutionListener;");
@@ -284,10 +284,10 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 			headerLst.add("import org.springframework.beans.factory.annotation.Value;");
 			headerLst.add("import org.springframework.stereotype.Component;");
 			headerLst.add("");
-			headerLst.add("import jp.co.fpt.common.Record;");
-			headerLst.add("import jp.co.fpt.common.Console;");
-			headerLst.add("import jp.co.fpt.helper.Compare;");
-			headerLst.add("import jp.co.fpt.logging.Logger;");			
+			headerLst.add("import com.alsm.runtime.common.Record;");
+			headerLst.add("import com.alsm.runtime.common.Console;");
+			headerLst.add("import com.alsm.runtime.helper.Compare;");
+			headerLst.add("import com.alsm.runtime.logging.Logger;");			
 			headerLst.add("");			
 			headerLst.add("import lombok.Getter;");			
 			headerLst.add("import lombok.Setter;");
