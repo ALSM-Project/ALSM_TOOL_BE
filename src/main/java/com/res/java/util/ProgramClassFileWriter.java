@@ -27,6 +27,20 @@ import org.xml.sax.SAXException;
 
 
 public class ProgramClassFileWriter extends ClassFileWriter {
+
+	/**
+	 * Package the generated classes of a program live in (the same one their package
+	 * declarations use: the -pp program package plus the program name). Imports between the
+	 * generated tasklet, configuration and model classes must use it - they used to hardcode
+	 * com.fpt.emt.batch.jobs, which never matched the packages the files were written with.
+	 */
+	private static String jobBasePackage(SymbolProperties props) {
+		String base = NameUtil.getPackageName(props, true);
+		base = base == null ? "" : base.replace("src.main.java.", "");
+		String name = props.getJavaName1().replace("src.main.", "");
+		return base.isEmpty() ? name : base + "." + name;
+	}
+
 	
 	private ArrayList<String> headerLst =new ArrayList<>();
 	private ArrayList<String> classLst =new ArrayList<>();
@@ -79,7 +93,7 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 		}
 		println("");
 		// EMT UDP 2025
-		println("import com.fpt.emt.batch.jobs." + props.getJavaName1() +".constants.JobConstants;");
+		println("import " + jobBasePackage(props) +".constants.JobConstants;");
 		println("import org.springframework.batch.core.Job;");
 		println("import org.springframework.batch.core.Step;");
 		println("import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;");
@@ -149,8 +163,8 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 			println("package " + s + ".configuration;");
 		}
 		println("");
-		println("import com.fpt.emt.batch.jobs." + props.getJavaName1() +".constants.JobConstants;");
-		println("import com.fpt.emt.batch.jobs." + props.getJavaName1() +".tasklet."
+		println("import " + jobBasePackage(props) +".constants.JobConstants;");
+		println("import " + jobBasePackage(props) +".tasklet."
 				+ props.getJavaName2() +"Tasklet;");		
 		println("import lombok.extern.slf4j.Slf4j;");
 		println("import org.springframework.batch.core.Step;");
@@ -235,7 +249,7 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 			println("");
 			*/
 			headerLst.add("");
-			headerLst.add("import com.fpt.emt.batch.jobs."+props.getJavaName1()+".configuration."
+			headerLst.add("import "+jobBasePackage(props)+".configuration."
 					+ props.getJavaName2()+"Model;");
 			headerLst.add("import jp.co.fpt.common.Console;");
 			headerLst.add("import lombok.extern.slf4j.Slf4j;");
