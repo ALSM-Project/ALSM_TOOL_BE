@@ -335,7 +335,10 @@ public class NameUtil {
 		// DAONH MOD Start: Checking first time to see Cobol's data variable to create Model class
 //		String s=getJavaName2(props2)+".java";
      	String s="";
-		if(props2.isFirstDataVar()) {
+		// A data class is always the program Model. Returning "" for any data symbol other than
+		// the first one made the writer open the output directory itself as the file, which
+		// failed silently - no Model class was ever written.
+		if(props2.isFirstDataVar() || isData) {
 			// EMT UDP 2025 
 			//s = SymbolTable.getScope().getFirstProgram().getJavaName2() + "Model.java";
 			s = "configuration" + File.separatorChar + SymbolTable.getScope().getFirstProgram().getJavaName2() + "Model.java";
