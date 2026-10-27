@@ -4451,6 +4451,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 		classLst.add("tab()");
 		if (fileLst != null) {
 			classLst.add("");
+			classLst.add("java.util.Map<String, Object> jobParameters = chunkContext.getStepContext().getJobParameters();");
 			for (SymbolProperties child : fileLst) {
 				// The file field is declared as getJavaName1() above, and the job parameter name must
 				// not carry the COBOL quotes (they used to end up doubled inside the Java string).
@@ -4497,6 +4498,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 			sourceLst.add("tab()");
 			while (e.hasMoreElements()) {
 				String key = (String) e.nextElement();
+				headerLst.add("import com.alsm.runtime.common.CallSupport;");
 				headerLst.add("import com.alsm.runtime.batch." + key.toLowerCase() + "." +
 				// NameUtil.convertCobolNameToJava(key.toUpperCase(),true) +"Tasklet;");
 						key + "Tasklet;");
@@ -4507,8 +4509,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 				if (taskletList.get(key).length() > 0) {
 					String[] itemLst = taskletList.get(key).split(";");
 					for (String s : itemLst) {
-						sourceLst.add("model." + s + ".write(" + key.toLowerCase() + "Tasklet.execute(model." + s
-								+ ").toString());");
+						// An argument is already written as model.getX() when it is a stand-alone variable.
+						String argument = s.startsWith("model.") ? s : "model." + s;
+						sourceLst.add("CallSupport.writeBack(" + argument + ", " + key.toLowerCase()
+								+ "Tasklet.execute(" + argument + "));");
 					}
 				}
 				sourceLst.add("backTab()");

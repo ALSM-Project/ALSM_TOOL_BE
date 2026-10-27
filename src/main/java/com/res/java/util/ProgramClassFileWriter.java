@@ -252,6 +252,8 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 			headerLst.add("import "+jobBasePackage(props)+".configuration."
 					+ props.getJavaName2()+"Model;");
 			headerLst.add("import com.alsm.runtime.common.Console;");
+			headerLst.add("import com.alsm.runtime.common.FileRecord;");
+			headerLst.add("import com.alsm.runtime.helper.Compare;");
 			headerLst.add("import lombok.extern.slf4j.Slf4j;");
 			headerLst.add("import org.springframework.batch.core.StepContribution;");
 			headerLst.add("import org.springframework.batch.core.StepExecutionListener;");
