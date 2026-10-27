@@ -2457,9 +2457,14 @@ private void printSetGetGroup( SymbolProperties props) {
 		String tmp = "";
 		if (value != null && value.length()>1)
 		{
-			tmp=value.substring(0,1).toUpperCase();
-			tmp += value.substring(1).toLowerCase();
-			tmp+="Model";
+			// COBOL names use hyphens (CODATECN-REC); a Java class name cannot, so each
+			// hyphen/underscore-separated part is capitalised instead: CodatecnRecModel.
+			for (String part : value.split("[-_]")) {
+				if (part.isEmpty())
+					continue;
+				tmp += part.substring(0, 1).toUpperCase() + part.substring(1).toLowerCase();
+			}
+			tmp += "Model";
 		}
 		return tmp;
 	}
