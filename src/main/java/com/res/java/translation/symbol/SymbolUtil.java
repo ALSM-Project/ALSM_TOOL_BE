@@ -892,7 +892,9 @@ public class SymbolUtil {
 				setgetLst=printSetGetVar(props,setgetLst);
 			} else {
 				varLst.add("tab()");
-				varLst.add("private " + getJavaType1(props) + " " + name1 + ";");			
+				String declaration = "private " + getJavaType1(props) + " " + name1 + ";";
+				if (!varLst.contains(declaration))
+					varLst.add(declaration);
 				varLst.add("backTab()");
 				if (!getValue(props).equals(""))
 					constructorsLst1.add(getValue(props));
@@ -1746,7 +1748,7 @@ public class SymbolUtil {
 				if (!isCopy && tmpSymProp.getRedefinedBy() == null) {
 					// Truong hop bien Level 1 la bien duoc gan kieu
 					if (tmpSymProp.getPictureString() != null) {
-						if (tmpSymProp.getLevelNumber() == 1) {
+						if (tmpSymProp.getLevelNumber() == 1 && !getOptionFormat(tmpSymProp).contains("COMP")) {
 							varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
 						}
 					} else {
@@ -1763,7 +1765,9 @@ public class SymbolUtil {
 			} else {
 				// Truong hop bien Level 1 la bien duoc gan kieu
 				if (tmpSymProp.getPictureString() != null) {
-					varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
+					// A COMP item is declared as a Record, with its backing bytes, by printCobolByteAccessors.
+					if (!getOptionFormat(tmpSymProp).contains("COMP"))
+						varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
 				} else {
 					// Truong hop la bien level1 va la bien groups
 					varLst.add("private " + tmpSymProp.getJavaName2() + " " + tmpSymProp.getJavaName1() + ";");
