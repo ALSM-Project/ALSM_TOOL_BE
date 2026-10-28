@@ -4451,11 +4451,13 @@ public class Cobol2Java extends DepthFirstVisitor {
 		if (fileLst != null) {
 			classLst.add("");
 			for (SymbolProperties child : fileLst) {
-				classLst.add(child.getDataName().toLowerCase() + ".withAssignName((String) jobParameters.get(\""
-						+ (child.getOtherName().substring(1, 3).equals("S-")
-								? (child.getOtherName().substring(3).replace("\"", ""))
-								: child.getOtherName())
-						+ "\"));");
+				// The file field is declared as getJavaName1(), and the job parameter name must not carry
+				// the COBOL quotes (they used to end up doubled inside the Java string).
+				String assignName = child.getOtherName().replace("\"", "");
+				if (assignName.startsWith("S-"))
+					assignName = assignName.substring(2);
+				classLst.add(child.getJavaName1() + ".withAssignName((String) jobParameters.get(\""
+						+ assignName + "\"));");
 			}
 			classLst.add("");
 		}
@@ -4494,7 +4496,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 			sourceLst.add("tab()");
 			while (e.hasMoreElements()) {
 				String key = (String) e.nextElement();
-				headerLst.add("import jp.co.alsm.batch." + key.toLowerCase() + "." +
+				// A called program is written into the same program package as the caller.
+				String calledBase = RESConfig.getInstance().getProgramPackage() == null ? "jp.co.alsm.batch"
+						: RESConfig.getInstance().getProgramPackage().replace('\\', '.').replace("src.main.java.", "");
+				headerLst.add("import " + calledBase + "." + key.toLowerCase() + "." +
 				// NameUtil.convertCobolNameToJava(key.toUpperCase(),true) +"Tasklet;");
 						key + "Tasklet;");
 				// System.out.println(key + " : " + taskletList.get(key));

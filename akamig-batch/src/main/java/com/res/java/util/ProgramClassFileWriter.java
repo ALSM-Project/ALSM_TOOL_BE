@@ -167,6 +167,7 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 			headerLst.add("");
 			headerLst.add("import jp.co.alsm.common.Record;");
 			headerLst.add("import jp.co.alsm.common.Console;");
+			headerLst.add("import jp.co.alsm.common.FileRecord;");
 			headerLst.add("import jp.co.alsm.helper.Compare;");
 			headerLst.add("import jp.co.alsm.logging.Logger;");			
 			headerLst.add("");			

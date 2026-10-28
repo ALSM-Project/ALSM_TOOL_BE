@@ -50,6 +50,8 @@ public class SymbolUtil {
 	private String strParent;
 	private int idxFiller;
 	
+	/** Level-01 items already written to the Model, so the same item is never declared twice. */
+	private java.util.Set<String> emittedModelAttrs = new java.util.HashSet<String>();
 	public void setCopyList(ArrayList<String[]> value) {
 		this.copy_List = value;
 	}
@@ -108,7 +110,8 @@ public class SymbolUtil {
 		modelNameLst = new ArrayList<String>();
 		
 		bFlag = false;
-		isFirstRun = true;	
+		isFirstRun = true;
+		emittedModelAttrs = new java.util.HashSet<String>();	
 	}
 
 	public void doClassBegin(SymbolProperties props, String name, boolean programScope) {
@@ -257,10 +260,9 @@ public class SymbolUtil {
 			}
 			else
 			{
-				ClassFile.doMethodScope("}");
-				//Add 20211022 S
-				ClassFile.endProgramScope();	
-				//Add 20211022 E
+				// endProgramScope() writes the closing brace of the class itself; writing one
+				// here as well left every generated Model file with an unmatched extra "}".
+				ClassFile.endProgramScope();
 			}
 // DaoNH MOD End: Closing the Model class
 // DAONH DEL Start: TODO check later
@@ -1707,12 +1709,17 @@ public class SymbolUtil {
 			constructorsLst1.clear();
 		}
 		while (tmpSymProp != null && !tmpSymProp.getDataName().equals("RETURN-CODE") && !bFlag) {
+			if (!emittedModelAttrs.add(tmpSymProp.getDataName())) {
+				tmpSymProp = tmpSymProp.getSibling();
+				continue;
+			}
 			boolean isCopy = false;
 			if (copy_List != null) {
 				for(String[] strCopy : copy_List)
 				{
-					if (tmpSymProp.getLevelNumber() ==1 && tmpSymProp.getDataName().contains(strCopy[1]) ||
-							tmpSymProp.getDataName().equals(strCopy[0]) )
+					if (isCommonModelCopybook(strCopy[1]) &&
+							(tmpSymProp.getLevelNumber() ==1 && tmpSymProp.getDataName().contains(strCopy[1]) ||
+							tmpSymProp.getDataName().equals(strCopy[0])) )
 					{
 						//System.out.println(tmpSymProp.getDataName());
 						//String modelName =  ConvertCopyName(strCopy[1]).trim();
@@ -2093,10 +2100,15 @@ public class SymbolUtil {
 		ArrayList<SymbolProperties.CoupleValue> arrayValues = child.getValues();
 		if (arrayValues != null) {
 			String strValues = (String) arrayValues.get(0).value1.toString();
+			// A COBOL literal may be quoted with ' or "; the Java string literal adds its own quotes.
+			if (strValues.length() >= 2 && (strValues.startsWith("\"") && strValues.endsWith("\"")
+					|| strValues.startsWith("'") && strValues.endsWith("'")))
+				strValues = strValues.substring(1, strValues.length() - 1);
 			if (isNumeric(strValues))
 				strRet = "set" + child.getJavaName2() + "(" + strValues + ");";
 			else
-				strRet = "set" + child.getJavaName2() + "(\"" + strValues + "\");";
+				// A backslash or double quote inside the literal must be escaped in the Java string.
+				strRet = "set" + child.getJavaName2() + "(\"" + strValues.replace("\\", "\\\\").replace("\"", "\\\"") + "\");";
 		}
 		return strRet.replace("'", "");
 	}
@@ -2442,6 +2454,21 @@ private void printSetGetGroup( SymbolProperties props) {
 		System.out.println("@CobolSourceFile(\""+Main.getContext().getSourceFileName()+"):"+msg);
 		System.exit(0);
 	}
+	/**
+	 * A copybook is imported as a ready-made model class from the runtime's common.model package
+	 * only when it is listed in the alsm.commonModelCopybooks system property (comma separated).
+	 * Every other copybook is generated into the program's own model, so the result compiles
+	 * without extra classes.
+	 */
+	private static boolean isCommonModelCopybook(String copybook) {
+		String listed = System.getProperty("alsm.commonModelCopybooks", "");
+		for (String name : listed.split(",")) {
+			if (!name.trim().isEmpty() && name.trim().equalsIgnoreCase(copybook))
+				return true;
+		}
+		return false;
+	}
+
 	private String ConvertCopyName(String value)
 	{
 		String tmp = "";

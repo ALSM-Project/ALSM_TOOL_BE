@@ -334,7 +334,7 @@ public class NameUtil {
 		// DAONH MOD Start: Checking first time to see Cobol's data variable to create Model class
 //		String s=getJavaName2(props2)+".java";
      	String s="";
-		if(props2.isFirstDataVar()) {
+		if(props2.isFirstDataVar() || isData) {
 			s = SymbolTable.getScope().getFirstProgram().getJavaName2() + "Model.java";
 		} else {
 		if(props2.getFlgJobFile()) {
