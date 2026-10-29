@@ -892,7 +892,9 @@ public class SymbolUtil {
 				setgetLst=printSetGetVar(props,setgetLst);
 			} else {
 				varLst.add("tab()");
-				varLst.add("private " + getJavaType1(props) + " " + name1 + ";");			
+				String declaration = "private " + getJavaType1(props) + " " + name1 + ";";
+				if (!varLst.contains(declaration))
+					varLst.add(declaration);
 				varLst.add("backTab()");
 				if (!getValue(props).equals(""))
 					constructorsLst1.add(getValue(props));
@@ -1721,8 +1723,9 @@ public class SymbolUtil {
 			if (copy_List != null) {
 				for(String[] strCopy : copy_List)
 				{
-					if (tmpSymProp.getLevelNumber() ==1 && tmpSymProp.getDataName().contains(strCopy[1]) ||
-							tmpSymProp.getDataName().equals(strCopy[0]) )
+					if (isCommonModelCopybook(strCopy[1]) &&
+							(tmpSymProp.getLevelNumber() ==1 && tmpSymProp.getDataName().contains(strCopy[1]) ||
+							tmpSymProp.getDataName().equals(strCopy[0])) )
 					{
 						//System.out.println(tmpSymProp.getDataName());
 						//String modelName =  ConvertCopyName(strCopy[1]).trim();
@@ -1746,7 +1749,7 @@ public class SymbolUtil {
 				if (!isCopy && tmpSymProp.getRedefinedBy() == null) {
 					// Truong hop bien Level 1 la bien duoc gan kieu
 					if (tmpSymProp.getPictureString() != null) {
-						if (tmpSymProp.getLevelNumber() == 1) {
+						if (tmpSymProp.getLevelNumber() == 1 && !getOptionFormat(tmpSymProp).contains("COMP")) {
 							varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
 						}
 					} else {
@@ -1763,7 +1766,9 @@ public class SymbolUtil {
 			} else {
 				// Truong hop bien Level 1 la bien duoc gan kieu
 				if (tmpSymProp.getPictureString() != null) {
-					varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
+					// A COMP item is declared as a Record, with its backing bytes, by printCobolByteAccessors.
+					if (!getOptionFormat(tmpSymProp).contains("COMP"))
+						varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
 				} else {
 					// Truong hop la bien level1 va la bien groups
 					varLst.add("private " + tmpSymProp.getJavaName2() + " " + tmpSymProp.getJavaName1() + ";");
@@ -2103,6 +2108,10 @@ public class SymbolUtil {
 		ArrayList<SymbolProperties.CoupleValue> arrayValues = child.getValues();
 		if (arrayValues != null) {
 			String strValues = (String) arrayValues.get(0).value1.toString();
+			// A COBOL literal may be quoted with ' or "; the Java string literal adds its own quotes.
+			if (strValues.length() >= 2 && (strValues.startsWith("\"") && strValues.endsWith("\"")
+					|| strValues.startsWith("'") && strValues.endsWith("'")))
+				strValues = strValues.substring(1, strValues.length() - 1);
 			if (isNumeric(strValues))
 				strRet = "set" + child.getJavaName2() + "(" + strValues + ");";
 			else
@@ -2452,6 +2461,20 @@ private void printSetGetGroup( SymbolProperties props) {
 		System.out.println("@CobolSourceFile(\""+Main.getContext().getSourceFileName()+"):"+msg);
 		System.exit(0);
 	}
+	/**
+	 * A copybook is imported as a ready-made model class from com.alsm.runtime.common.model only
+	 * when it is listed in the alsm.commonModelCopybooks system property (comma separated).
+	 * Every other copybook is generated into the program's own model.
+	 */
+	private static boolean isCommonModelCopybook(String copybook) {
+		String listed = System.getProperty("alsm.commonModelCopybooks", "");
+		for (String name : listed.split(",")) {
+			if (!name.trim().isEmpty() && name.trim().equalsIgnoreCase(copybook))
+				return true;
+		}
+		return false;
+	}
+
 	private String ConvertCopyName(String value)
 	{
 		String tmp = "";
