@@ -330,34 +330,17 @@ public class Main {
 				}
 			}
 	*/
-
-
-
-		// QuyTV 
-		// Print tasklet declare
-		// EMT ADD FOR TASKLET 2025
-		ClassFile.doProgramScopeTaskLetTemplate();	
-		//
-		Cobol2Java.printTaskletDeclare(headerLst,classLst, fileLst);
-		ClassFile.endProgramScope();
-		
-	    // EMD ADD STEP TEMPLATE 2025
-		ClassFile.doProgramScopeConstTemplate();
-		ClassFile.endProgramScope();
-		//
-		// EMD ADD STEP TEMPLATE 2025
-	    ClassFile.doProgramScopeStepTemplate();
-		ClassFile.endProgramScope();
-		//
+		 // QuyTV 
+		 // Print tasklet declare
+		 Cobol2Java.printTaskletDeclare(headerLst,classLst, fileLst);
+			ClassFile.endProgramScope();
 		 //QuyTV Print job template
-		ClassFile.doProgramScopeJobTemplate();
-		ClassFile.endProgramScope();
+		 ClassFile.doProgramScopeJobTemplate();
+		 ClassFile.endProgramScope();
+			SymbolTable.getScope().endProgram();
 
-		
-		SymbolTable.getScope().endProgram();
-
-		if (config.isToGenVSAMISAMDb())
-			genDB(unit);
+			if (config.isToGenVSAMISAMDb())
+				genDB(unit);
 
 		} catch (Exception ex) {
 			ex.printStackTrace();

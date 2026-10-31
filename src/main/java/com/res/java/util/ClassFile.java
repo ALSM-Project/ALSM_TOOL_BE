@@ -42,34 +42,11 @@ public class ClassFile {
 	public static void doProgramScopeJobTemplate() {	
 		SymbolProperties pro= SymbolTable.getScope().getCurrentProgram();
 		pro.setFlgJobFile(true);
-		current=new ProgramClassFileWriter(pro,true,1);
+		current=new ProgramClassFileWriter(pro,true);
 		files.push(current);
 	}
 	//QuyTV E
-	// EMT ADD STEP 2025
-	public static void doProgramScopeStepTemplate() {	
-		SymbolProperties pro= SymbolTable.getScope().getCurrentProgram();
-		pro.setFlgStepFile(true);
-		current=new ProgramClassFileWriter(pro,true,2);
-		files.push(current);
-	}	
-	//
-	// EMT ADD CONST 2025
-	public static void doProgramScopeConstTemplate() {	
-		SymbolProperties pro= SymbolTable.getScope().getCurrentProgram();
-		pro.setFlgConstFile(true);
-		current=new ProgramClassFileWriter(pro,true,3);
-		files.push(current);
-	}	
-	//
-	// EMT ADD TASKLET 2025
-	public static void doProgramScopeTaskLetTemplate() {	
-		SymbolProperties pro= SymbolTable.getScope().getCurrentProgram();
-		pro.setFlgTaskLet(true);
-		current=new ProgramClassFileWriter(pro);
-		files.push(current);
-	}	
-	//
+	
 	public static void doProgramScope(ClassFileWriter gen) {
 		current=gen;
 		files.push(current);

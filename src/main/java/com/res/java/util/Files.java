@@ -27,7 +27,6 @@ import java.util.Calendar;
 import com.res.common.RESConfig;
 import com.res.java.lib.RunTimeUtil;
 import com.res.java.translation.symbol.SymbolProperties;
-import com.res.java.translation.symbol.SymbolTable;
 
 public class Files {
 	
@@ -39,7 +38,6 @@ public class Files {
 		String filePath = "";
 //		path+=File.separatorChar+NameUtil.getFileName(props,isData);
 		if(RESConfig.getInstance().getOutputDir().isEmpty()) {
-			// 2025 Code doi ung cho create fill, folder
 			outputDir = path + File.separatorChar + NameUtil.getJavaName1(props) + File.separatorChar;
 			filePath = outputDir + NameUtil.getFileName(props,isData);
 			RESConfig.getInstance().setOutputDir(outputDir);
@@ -60,8 +58,9 @@ public class Files {
 	
 	public static boolean exists(SymbolProperties props,boolean isData) {
 		try {
-			//2025 Code doi ung for create File/Folder
-			String path=(NameUtil.getPackageName(props,!isData) + File.separatorChar + NameUtil.getJavaName2(props)).replace('.',File.separatorChar);		
+			
+			String path=(NameUtil.getPackageName(props,!isData) + File.separatorChar + NameUtil.getJavaName2(props)).replace('.',File.separatorChar);
+			
 			path+=File.separatorChar+NameUtil.getFileName(props,isData);		
 			int i = path.indexOf(File.separatorChar);
 			String dirStr = "";
@@ -101,23 +100,16 @@ public class Files {
 						RESConfig.getInstance().getOutputDir().trim()
 				);
 			if(dirStr==null) dirStr="";
-			else {
+			else { 
 				dirStr.replace('/',File.separatorChar);
 				if(dirStr.length()>0&&dirStr.lastIndexOf(File.separatorChar)!=dirStr.length()-1) {
 					dirStr+=File.separatorChar;
 				}
 			}
 			File dir = null;
-			// Was `do { ... } while (i>0)`: when path has no separator at all (a bare file
-			// name, e.g. just "Cbact01cTasklet.java"), indexOf returns -1 and the do-while's
-			// unconditional first iteration called path.substring(0, -1), throwing
-			// StringIndexOutOfBoundsException and aborting translation for the whole program
-			// with no real Java code ever written beyond the header. Checking the condition
-			// before entering the loop (while, not do-while) skips directory-splitting
-			// entirely for a bare file name instead of crashing on it.
-			while (i>0) {
+			do {
 				dirStr+=path.substring(0, i)+File.separatorChar;
-				path=path.substring(i+1);
+				path=path.substring(i+1);			
 				dir = new File(dirStr);
 				if (dir.exists())
 					if (dir.isDirectory())
@@ -126,7 +118,7 @@ public class Files {
 						System.out.println("Cannot create output directory. File of that name exists.");
 						System.exit(-1);
 					}
-				else
+				else 
 					if(dir.mkdir())
 						;
 					else {
@@ -134,14 +126,7 @@ public class Files {
 						System.exit(-1);
 					}
 				i = path.indexOf(File.separatorChar);
-			}
-			if (dir == null && dirStr.length() > 0) {
-				// path was a bare file name - still honor the configured output directory
-				// (dirStr, derived from RESConfig above) instead of silently falling back to
-				// the process's current working directory.
-				dir = new File(dirStr);
-				if (!dir.exists()) dir.mkdirs();
-			}
+			} while (i>0);
 			if(path!=null&&path.length()>0&&path.indexOf(".java")>0) {
 				if(!RESConfig.getInstance().isOverwriteJavaFiles()) 
 					if(new File(dir,path).exists()) {
@@ -187,7 +172,7 @@ public class Files {
 //						RESConfig.getInstance().getOutputDir().trim()
 //				);
 //			if(dirStr==null) dirStr="";
-//			else {
+//			else { 
 //				dirStr.replace('/',File.separatorChar);
 //				if(dirStr.length()>0&&dirStr.lastIndexOf(File.separatorChar)!=dirStr.length()-1) {
 //					dirStr+=File.separatorChar;
@@ -195,20 +180,9 @@ public class Files {
 //			}
 			File dir = null;
 			String dirStr = "";
-			// Real crash reproduced against actual CardDemo COBOL sources (e.g.
-			// CBACT01C.CBL): filePath is frequently a bare file name with no directory
-			// separator at all once outputDir has already been folded into it by the
-			// caller (see openClassFile(SymbolProperties,boolean) above). indexOf then
-			// returns -1, and the old `do { ... } while (i>0)` still ran its body once
-			// unconditionally, calling filePath.substring(0, -1) ->
-			// StringIndexOutOfBoundsException("Range [0, -1) out of bounds"), caught by
-			// the catch block below, which printed the stack trace and called
-			// System.exit(0) - silently terminating translation for the entire program
-			// after only the header comment had been written. Checking the loop
-			// condition before entering (while, not do-while) fixes this exact crash.
-			while (i>0) {
+			do {
 				dirStr+=filePath.substring(0, i)+File.separatorChar;
-				filePath=filePath.substring(i+1);
+				filePath=filePath.substring(i+1);			
 				dir = new File(dirStr);
 				if (dir.exists())
 					if (dir.isDirectory())
@@ -217,7 +191,7 @@ public class Files {
 						System.out.println("Cannot create output directory. File of that name exists.");
 						System.exit(-1);
 					}
-				else
+				else 
 					if(dir.mkdir())
 						;
 					else {
@@ -225,14 +199,7 @@ public class Files {
 						System.exit(-1);
 					}
 				i = filePath.indexOf(File.separatorChar);
-			}
-			if (dir == null && outputDir != null && !outputDir.isEmpty()) {
-				// filePath had no directory component of its own - still honor the
-				// outputDir the caller explicitly asked for instead of silently falling
-				// back to the process's current working directory.
-				dir = new File(outputDir);
-				if (!dir.exists()) dir.mkdirs();
-			}
+			} while (i>0);
 			if(filePath!=null&&filePath.length()>0&&filePath.indexOf(".java")>0) {
 				if(!RESConfig.getInstance().isOverwriteJavaFiles()) 
 					if(new File(dir,filePath).exists()) {

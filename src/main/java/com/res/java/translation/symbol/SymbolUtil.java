@@ -45,14 +45,13 @@ public class SymbolUtil {
 	private String modelName =null;
 	
 	private boolean  bFlag = false;
-	// Level-01 items already written to the Model: doClassBegin runs once per 01 group and each
-	// run walks the remaining siblings again, which used to declare the same field several times.
-	private java.util.Set<String> emittedModelAttrs = new java.util.HashSet<String>();
 	private boolean isFirstRun = true;
 	
 	private String strParent;
 	private int idxFiller;
 	
+	/** Level-01 items already written to the Model, so the same item is never declared twice. */
+	private java.util.Set<String> emittedModelAttrs = new java.util.HashSet<String>();
 	public void setCopyList(ArrayList<String[]> value) {
 		this.copy_List = value;
 	}
@@ -111,8 +110,8 @@ public class SymbolUtil {
 		modelNameLst = new ArrayList<String>();
 		
 		bFlag = false;
-		isFirstRun = true;	
-		emittedModelAttrs = new java.util.HashSet<String>();
+		isFirstRun = true;
+		emittedModelAttrs = new java.util.HashSet<String>();	
 	}
 
 	public void doClassBegin(SymbolProperties props, String name, boolean programScope) {
@@ -122,11 +121,9 @@ public class SymbolUtil {
 				headerLst.add("");
 				headerLst.add("import org.springframework.stereotype.Component;");
 				headerLst.add("");
-				// EMT UDP 2025 
-				//headerLst.add("import com.alsm.runtime.common.Constant;");
-				//headerLst.add("import com.alsm.runtime.helper.StringHelper;");
-				//
-				headerLst.add("import com.alsm.runtime.common.Record;");
+				headerLst.add("import jp.co.alsm.common.Constant;");
+				headerLst.add("import jp.co.alsm.common.Record;");
+				headerLst.add("import jp.co.alsm.helper.StringHelper;");
 				classLst.add("import lombok.Getter;");
 				classLst.add("import lombok.Setter;");
 				classLst.add("");
@@ -263,10 +260,9 @@ public class SymbolUtil {
 			}
 			else
 			{
-				ClassFile.doMethodScope("}");
-				//Add 20211022 S
-				// EMT UDP 2025 ClassFile.endProgramScope();	
-				//Add 20211022 E
+				// endProgramScope() writes the closing brace of the class itself; writing one
+				// here as well left every generated Model file with an unmatched extra "}".
+				ClassFile.endProgramScope();
 			}
 // DaoNH MOD End: Closing the Model class
 // DAONH DEL Start: TODO check later
@@ -892,9 +888,7 @@ public class SymbolUtil {
 				setgetLst=printSetGetVar(props,setgetLst);
 			} else {
 				varLst.add("tab()");
-				String declaration = "private " + getJavaType1(props) + " " + name1 + ";";
-				if (!varLst.contains(declaration))
-					varLst.add(declaration);
+				varLst.add("private " + getJavaType1(props) + " " + name1 + ";");			
 				varLst.add("backTab()");
 				if (!getValue(props).equals(""))
 					constructorsLst1.add(getValue(props));
@@ -1736,7 +1730,7 @@ public class SymbolUtil {
 							modelName =  ConvertCopyName(strCopy[1]).trim();
 							
 						if (!modelNameLst.contains(modelName)) {						
-						   headerLst.add("import com.alsm.runtime.common.model." + modelName + ";");
+						   headerLst.add("import jp.co.alsm.common.model." + modelName + ";");
 						   modelNameLst.add(modelName);
 						}
 						varLst.add("private " + modelName + " " + tmpSymProp.getJavaName1() + ";");
@@ -1749,7 +1743,7 @@ public class SymbolUtil {
 				if (!isCopy && tmpSymProp.getRedefinedBy() == null) {
 					// Truong hop bien Level 1 la bien duoc gan kieu
 					if (tmpSymProp.getPictureString() != null) {
-						if (tmpSymProp.getLevelNumber() == 1 && !getOptionFormat(tmpSymProp).contains("COMP")) {
+						if (tmpSymProp.getLevelNumber() == 1) {
 							varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
 						}
 					} else {
@@ -1766,9 +1760,7 @@ public class SymbolUtil {
 			} else {
 				// Truong hop bien Level 1 la bien duoc gan kieu
 				if (tmpSymProp.getPictureString() != null) {
-					// A COMP item is declared as a Record, with its backing bytes, by printCobolByteAccessors.
-					if (!getOptionFormat(tmpSymProp).contains("COMP"))
-						varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
+					varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
 				} else {
 					// Truong hop la bien level1 va la bien groups
 					varLst.add("private " + tmpSymProp.getJavaName2() + " " + tmpSymProp.getJavaName1() + ";");
@@ -2115,7 +2107,8 @@ public class SymbolUtil {
 			if (isNumeric(strValues))
 				strRet = "set" + child.getJavaName2() + "(" + strValues + ");";
 			else
-				strRet = "set" + child.getJavaName2() + "(\"" + strValues + "\");";
+				// A backslash or double quote inside the literal must be escaped in the Java string.
+				strRet = "set" + child.getJavaName2() + "(\"" + strValues.replace("\\", "\\\\").replace("\"", "\\\"") + "\");";
 		}
 		return strRet.replace("'", "");
 	}
@@ -2462,9 +2455,10 @@ private void printSetGetGroup( SymbolProperties props) {
 		System.exit(0);
 	}
 	/**
-	 * A copybook is imported as a ready-made model class from com.alsm.runtime.common.model only
-	 * when it is listed in the alsm.commonModelCopybooks system property (comma separated).
-	 * Every other copybook is generated into the program's own model.
+	 * A copybook is imported as a ready-made model class from the runtime's common.model package
+	 * only when it is listed in the alsm.commonModelCopybooks system property (comma separated).
+	 * Every other copybook is generated into the program's own model, so the result compiles
+	 * without extra classes.
 	 */
 	private static boolean isCommonModelCopybook(String copybook) {
 		String listed = System.getProperty("alsm.commonModelCopybooks", "");
@@ -2480,14 +2474,9 @@ private void printSetGetGroup( SymbolProperties props) {
 		String tmp = "";
 		if (value != null && value.length()>1)
 		{
-			// COBOL names use hyphens (CODATECN-REC); a Java class name cannot, so each
-			// hyphen/underscore-separated part is capitalised instead: CodatecnRecModel.
-			for (String part : value.split("[-_]")) {
-				if (part.isEmpty())
-					continue;
-				tmp += part.substring(0, 1).toUpperCase() + part.substring(1).toLowerCase();
-			}
-			tmp += "Model";
+			tmp=value.substring(0,1).toUpperCase();
+			tmp += value.substring(1).toLowerCase();
+			tmp+="Model";
 		}
 		return tmp;
 	}

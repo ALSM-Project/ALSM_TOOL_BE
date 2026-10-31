@@ -20,24 +20,20 @@ public class DataClassFileWriter extends ClassFileWriter {
 		printHeader(props,parent);
 		//20210703 Update E
 	}
-	//package com.alsm.runtime.batch
+	//package jp.co.alsm.batch
 	//20210703 update S
 	//public void printHeader(SymbolProperties props) {
 	public void printHeader(SymbolProperties props, SymbolProperties parent) {
 	//20210703 update E
 		String s;
-		// EMT UDP 2025
-		// if((s = NameUtil.getPackageName(props,false))!=null&&s.length()>0) {
-		if ((s = NameUtil.getPackageName(props,true))!=null&&s.length()>0) {
+		if ((s = NameUtil.getPackageName(props,false))!=null&&s.length()>0) {
 			s=s.replace("src.main.java.", "");
 			//20210703 update S
 			//s+="."+ props.getJavaName1();
 			s+="."+ parent.getJavaName1();
 			//20210703 update E
-			// EMT UDP 2025	
-			//println("package "+s+";");
-			//println("package "+s+";",true);
-			println("package "+s+".configuration;");
+			println("package "+s+";");
+			println("package "+s+";",true);
 		}
 		if(props.getType()==SymbolConstants.PROGRAM) {
 			//println("/************************************************************************");

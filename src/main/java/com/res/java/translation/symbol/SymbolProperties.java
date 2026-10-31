@@ -115,13 +115,6 @@ public class SymbolProperties implements Cloneable {
 	private SymbolProperties sibling;
 	
 	private boolean flgJobFile = false;
-	// EMT ADD FOR STEP FILE 2025
-	private boolean flgStepFile = false;
-	// EMT ADD FOR CONST FILE 2025
-	private boolean flgConstFile = false;
-	// EMT ADD FOR TASKLET 2025
-	private boolean flgTaskLet = false;
-	
 
 	public String getDataName() {
 		return dataName;
@@ -509,33 +502,6 @@ public class SymbolProperties implements Cloneable {
     public boolean getFlgJobFile() {
         return flgJobFile;
     }
-    // EMT ADD For Step File 2025
-    public void setFlgStepFile(boolean flg) {
-        flgStepFile=flg;
-    }
-    
-    public boolean getFlgStepFile() {
-        return flgStepFile;
-    }
-    //
-    // EMT ADD For Const File 2025
-    public void setFlgConstFile(boolean flg) {
-        flgConstFile=flg;
-    }
-    
-    public boolean getFlgConstFile() {
-        return flgConstFile;
-    }
-    //
-    // EMT ADD For Const File 2025
-    public void setFlgTaskLet(boolean flg) {
-        flgTaskLet=flg;
-    }
-    
-    public boolean getFlgTaskLet() {
-        return flgTaskLet;
-    }
-    //
     public String getOtherName() {
         return otherName;
     }

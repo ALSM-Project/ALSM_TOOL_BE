@@ -1,7 +1,6 @@
 package com.res.java.util;
 
 
-import java.io.File;
 import java.util.Iterator;
 import java.util.Stack;
 import java.util.TreeSet;
@@ -335,39 +334,15 @@ public class NameUtil {
 		// DAONH MOD Start: Checking first time to see Cobol's data variable to create Model class
 //		String s=getJavaName2(props2)+".java";
      	String s="";
-		// A data class is always the program Model. Returning "" for any data symbol other than
-		// the first one made the writer open the output directory itself as the file, which
-		// failed silently - no Model class was ever written.
 		if(props2.isFirstDataVar() || isData) {
-			// EMT UDP 2025 
-			//s = SymbolTable.getScope().getFirstProgram().getJavaName2() + "Model.java";
-			s = "configuration" + File.separatorChar + SymbolTable.getScope().getFirstProgram().getJavaName2() + "Model.java";
-			return s;
-		} 
-
+			s = SymbolTable.getScope().getFirstProgram().getJavaName2() + "Model.java";
+		} else {
 		if(props2.getFlgJobFile()) {
-			// EMT UDP 2025 
-			// s=getJavaName2(props2)+"Job.java";
-			 s="configuration" + File.separatorChar + getJavaName2(props2)+"Configuration.java";
-			 return s;
+			 s=getJavaName2(props2)+"Job.java";
+		}else {
+			 s=getJavaName2(props2)+"Tasklet.java";
 		}
-
-		// EMT ADD FOR STEP FILE 2025
-		if (props2.getFlgStepFile()) {
-			 s="configuration" + File.separatorChar + getJavaName2(props2)+"StepConfiguration.java";
-			 return s;
-		} 
-		// EMT ADD CONST FILE 2025
-		if (props2.getFlgConstFile()) {
-			 s="constants" + File.separatorChar + "JobConstants.java";
-			 return s;
-		}
-		//
-		// EMT UDP 2025
-		//s= getJavaName2(props2)+"Tasklet.java";
-		if (props2.getFlgTaskLet()) {
-			s="tasklet"+ File.separatorChar + getJavaName2(props2)+"Tasklet.java";
-			return s;
+				
 		}
 		return s;
 		// DAONH MOD Start: Checking first time to see Cobol's data variable to create Model class
