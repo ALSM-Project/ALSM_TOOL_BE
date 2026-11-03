@@ -82,13 +82,23 @@ public class SymbolUtil {
 			// any getter or setter, so every field is written once.
 			java.util.Set<String> declaredFields = new java.util.HashSet<String>();
 			java.util.regex.Pattern fieldDeclaration =
-					java.util.regex.Pattern.compile("^private\\s+.+?\\s+(\\w+)\\s*(?:=.*)?;\\s*$");
+					java.util.regex.Pattern.compile("^private\\s+(.+?)\\s+(\\w+)\\s*(?:=.*)?;\\s*$");
+			// A COMP item is declared twice: as a plain int/String by the model attributes and as
+			// the Record its accessors read. The Record is the one the rest of the class uses.
+			java.util.Set<String> recordFields = new java.util.HashSet<String>();
+			for(String item : varLst) {
+				java.util.regex.Matcher m = fieldDeclaration.matcher(item);
+				if (m.matches() && m.group(1).equals("Record")) recordFields.add(m.group(2));
+			}
 			for(String item : varLst){
 				if (item.equals("tab()")) ClassFile.tab();
 				else if (item.equals("backTab()")) ClassFile.backTab();
 				else {
 					java.util.regex.Matcher m = fieldDeclaration.matcher(item);
-					if (m.matches() && !declaredFields.add(m.group(1))) continue;
+					if (m.matches()) {
+						if (!m.group(1).equals("Record") && recordFields.contains(m.group(2))) continue;
+						if (!declaredFields.add(m.group(2))) continue;
+					}
 					ClassFile.println(item);
 				}
 			}
@@ -2317,7 +2327,8 @@ public class SymbolUtil {
 	private ArrayList<String> printSetGetVar(SymbolProperties child, ArrayList<String> arrayLst) {
 		String javaName1=getName(child.getJavaName1());
 		String javaName2=getName(child.getJavaName2());		
-		addTypedAccessors(arrayLst, javaName2, "record" + javaName2, getJavaType1(child));
+		// Through the sub-Record that carries the picture and COMP option, not the raw buffer.
+		addTypedAccessors(arrayLst, javaName2, javaName1, getJavaType1(child));
 		return arrayLst;
 	}
 
@@ -2327,6 +2338,19 @@ public class SymbolUtil {
 		setgetLst.add("public void write(String value) {");
 		setgetLst.add("tab()");
 		setgetLst.add("record.set(value, 0, Length);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		// COBOL moves numbers into groups too (MOVE 23 TO IO-STATUS).
+		setgetLst.add("public void write(int value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("write(String.valueOf(value));");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		setgetLst.add("public void write(long value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("write(String.valueOf(value));");
 		setgetLst.add("backTab()");
 		setgetLst.add("}");
 		setgetLst.add("");

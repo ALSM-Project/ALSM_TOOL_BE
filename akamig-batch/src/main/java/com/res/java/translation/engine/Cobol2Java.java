@@ -4453,13 +4453,18 @@ public class Cobol2Java extends DepthFirstVisitor {
 				sourceLst.add(key + "Tasklet " + key.toLowerCase() + "Tasklet = new " + key + "Tasklet();");
 				if (taskletList.get(key).length() > 0) {
 					String[] itemLst = taskletList.get(key).split(";");
+					// One call with every USING argument. The result is not written back: the
+					// arguments may be numeric items, which have no write(), and a called program
+					// that was converted has no execute(Object...) to return anything anyway.
+					StringBuilder arguments = new StringBuilder();
 					for (String s : itemLst) {
 						// NameUtil already renders a group as model.getX().toString(); take the bare
 						// accessor so the prefix is added once.
 						String accessor = s.replaceFirst("^model\\.", "").replaceFirst("\\.toString\\(\\)$", "");
-						sourceLst.add("model." + accessor + ".write(" + key.toLowerCase() + "Tasklet.execute(model." + accessor
-								+ ").toString());");
+						if (arguments.length() > 0) arguments.append(", ");
+						arguments.append("model.").append(accessor);
 					}
+					sourceLst.add(key.toLowerCase() + "Tasklet.execute(" + arguments + ");");
 				}
 				sourceLst.add("backTab()");
 				sourceLst.add("}");
