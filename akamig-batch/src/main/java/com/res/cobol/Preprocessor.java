@@ -225,7 +225,7 @@ public class Preprocessor {
 		output.println("# " + 1 + " \"" + copyClass.copyName + "\"  ");
 
 		try {
-			input = new BufferedReader(new FileReader(copyClass.copy_file));
+			input = new BufferedReader(new InputStreamReader(new FileInputStream(copyClass.copy_file), Main.getSourceCharset()));
 			preprocessMainline();
 		} catch (Exception ex) {
 			System.err.println("IO Exception while processing COPY line " + line_number + " " + line);
@@ -376,7 +376,7 @@ public class Preprocessor {
 		output.println("# " + 1 + " \"" + copyClass.copyName + "\"  ");
 
 		try {
-			input = new BufferedReader(new FileReader(copyClass.copy_file));
+			input = new BufferedReader(new InputStreamReader(new FileInputStream(copyClass.copy_file), Main.getSourceCharset()));
 			preprocessMainline();
 		} catch (Exception ex) {
 			System.err.println("IO Exception while processing COPY line " + line_number + " " + line);
@@ -417,11 +417,38 @@ public class Preprocessor {
 		}
 	}
 
+	/**
+	 * Where a copybook is looked for: the project-wide registry built in pass 1, so a COPY
+	 * resolves wherever the copybook lives, then the folders given with -I, then (by the caller)
+	 * the folder of the program itself.
+	 */
+	private File findCopyFile(String copy_name) {
+		ProjectIndex index = Main.getProjectIndex();
+		if (index != null) {
+			java.nio.file.Path found = index.findCopybook(copy_name);
+			if (found != null)
+				return found.toFile();
+		}
+		for (File dir : Main.getIncludeDirs()) {
+			String[] suffixes = { "", ".cpy", ".CPY", ".cbl", ".CBL", ".cob", ".COB", ".copy", ".inc" };
+			for (String suffix : suffixes) {
+				File candidate = new File(dir, copy_name + suffix);
+				if (candidate.isFile())
+					return candidate;
+			}
+		}
+		return null;
+	}
+
 	private CopyClass checkCopy(String copy_name, boolean fromCopy) throws IOException {
 
 		copy_name = RunTimeUtil.getInstance().stripQuotes((String) copy_name);
 
-		File copy_file = new File(source_path, copy_name);
+		File copy_file = findCopyFile(copy_name);
+
+		if (copy_file == null) {
+			copy_file = new File(source_path, copy_name);
+		}
 
 		if (!copy_file.exists()) {
 			String copy_name2 = copy_name + ".CPY";
@@ -1219,7 +1246,7 @@ public class Preprocessor {
 		try {
 			File in_file = new File(in_path);
 			source_path = in_file.getParentFile();
-			input = new BufferedReader(new FileReader(in_file));
+			input = new BufferedReader(new InputStreamReader(new FileInputStream(in_file), Main.getSourceCharset()));
 			if (out_pipe != null) {
 				output = new PrintWriter(out_pipe);
 			} else {
@@ -1261,13 +1288,13 @@ public class Preprocessor {
 			copy_list = new ArrayList<String[]>();
 
 			// DaoNH MOD Start: Support charset SHIFT-JIS
-			//input = new BufferedReader(new FileReader(in_file));
+			//input = new BufferedReader(new InputStreamReader(new FileInputStream(in_file), Main.getSourceCharset()));
 			FileInputStream fis = new FileInputStream(in_file);
-			InputStreamReader isr = new InputStreamReader(fis, Charset.forName("SJIS"));
+			InputStreamReader isr = new InputStreamReader(fis, Main.getSourceCharset());
 			input = new BufferedReader(isr);
 			// DaoNH MOD End: Support charset SHIFT-JIS
 			if (out_path != null) {
-				output = new PrintWriter(new FileWriter(out_path));
+				output = new PrintWriter(new java.io.OutputStreamWriter(new java.io.FileOutputStream(out_path), java.nio.charset.StandardCharsets.UTF_8));
 			} else {
 				output = new PrintWriter(System.out);
 			}

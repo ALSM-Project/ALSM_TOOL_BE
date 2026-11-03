@@ -1,5 +1,6 @@
 package com.res.cobol;
 
+import com.res.common.CobolTranslationException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FilenameFilter;
@@ -44,6 +45,34 @@ public class Main {
 	private static Preprocessor preprocessor = new Preprocessor();
 	private long startClock;
 	
+	/** Charset of the COBOL sources and copybooks (-encoding); the intermediate file is always UTF-8. */
+	private static java.nio.charset.Charset sourceCharset = java.nio.charset.StandardCharsets.UTF_8;
+	/** Pass-1 index of a project conversion (-project); null when single files are converted. */
+	private static ProjectIndex projectIndex;
+	/** Extra folders searched for copybooks (-I). */
+	private static final java.util.List<File> includeDirs = new ArrayList<File>();
+	/** True while a project is converted: errors of one program are thrown to the driver, not swallowed. */
+	private static boolean projectMode;
+	private String projectRoot;
+	private String basePackage = "jp.co.alsm.batch";
+	private boolean scaffold;
+
+	public static java.nio.charset.Charset getSourceCharset() {
+		return sourceCharset;
+	}
+
+	public static ProjectIndex getProjectIndex() {
+		return projectIndex;
+	}
+
+	public static void setProjectIndex(ProjectIndex index) {
+		projectIndex = index;
+	}
+
+	public static java.util.List<File> getIncludeDirs() {
+		return includeDirs;
+	}
+
 	private static ArrayList<String> headerLst;
 	private static ArrayList<String> classLst;
 	private static ArrayList<SymbolProperties> fileLst;
@@ -77,6 +106,7 @@ public class Main {
 	public static void main(String[] args) {
 
 		Main instance = new Main();
+		int code = 0;
 
 		try {
 			int i = instance.getOptions(args);
@@ -97,7 +127,10 @@ public class Main {
 			if (context.isProcessVerbose()) {
 				System.out.println("Options: " + context.getOptionsVerbose().toString());
 			}
-			if (!RESConfig.getInstance().isDoListDir()) {
+			if (instance.projectRoot != null) {
+				code = new ProjectConverter(instance, instance.projectRoot, RESConfig.getInstance().getOutputDir(),
+						instance.basePackage, instance.scaffold).run();
+			} else if (!RESConfig.getInstance().isDoListDir()) {
 				instance.execute(args[i]);
 			} else {
 				File dotDir = new File(args[i]);
@@ -143,14 +176,20 @@ public class Main {
 			}
 			// DaoNH ADD End: Skip copy file in case parsing java files processing has error
 */
+		} catch (CobolTranslationException e) {
+			System.err.println(e.getMessage());
+			code = 1;
 		} catch (Exception e) {
-			System.err.println(args[args.length - 1]);
+			System.err.println(args.length > 0 ? args[args.length - 1] : "");
 			e.printStackTrace();
 		}
 
 		System.out
 				.println("Done in " + Math.round((System.currentTimeMillis() - instance.startClock) / 1000) + "s.\r\n");
-		System.exit(0);
+		// The only exit left, and only to report failure to the caller: nothing below this point
+		// (translator, preprocessor, file helpers) ends the process any more.
+		if (code != 0)
+			System.exit(code);
 	}
 
 	public void execute(String fileName) {
@@ -173,13 +212,15 @@ public class Main {
 				// DaoNH MOD End: Directories recursive mode
 				System.out.println("Invalid Source File: " + fileName);
 			} else {
-				String dest = "$temporary.file";
+				// One temp file per run: the fixed name $temporary.file let two conversions started
+				// from the same folder overwrite each other.
+				File tempFile = java.nio.file.Files.createTempFile("cobol-" + Thread.currentThread().getId() + "-", ".pre").toFile();
+				String dest = tempFile.getPath();
 				if (context.isProcessPreprocessOnly()) {
+					tempFile.delete();
 					preprocessor.preprocess(fileName, null);
 				} else {
-					destF = new File(dest);
-					if (destF.exists())
-						destF.delete();
+					destF = tempFile;
 					preprocessor.preprocess(fileName, dest);
 					if (!destF.exists())
 						return;			
@@ -241,6 +282,45 @@ public class Main {
 		System.gc();
 	}
 
+	/**
+	 * Translates one program of a project. Unlike execute(), a failure is thrown as a
+	 * CobolTranslationException so the project driver can record it and go on with the next
+	 * program.
+	 */
+	public void translateProgram(File source) throws IOException {
+		File temp = java.nio.file.Files.createTempFile(
+				"cobol-" + Thread.currentThread().getId() + "-" + java.util.UUID.randomUUID() + "-", ".pre").toFile();
+		try {
+			RESConfig.getInstance().setInError(false);
+			com.res.common.Diagnostics.clear();
+			context = new RESContext();
+			preprocessor = new Preprocessor();
+			context.setSourceFileName(source.getName());
+			srcF = source;
+			preprocessor.preprocess(source.getPath(), temp.getPath());
+			if (!temp.exists() || temp.length() == 0)
+				throw new CobolTranslationException("The preprocessor produced no output", source.getPath(), -1);
+			context.setSourceIn(new FileInputStream(temp));
+			CompilationUnit unit = parse(context);
+			if (unit == null || RESConfig.getInstance().isInError())
+				throw errorFromDiagnostics("Errors found while reading the program", source.getPath());
+			translate(unit);
+		} finally {
+			try {
+				if (context.getSourceIn() != null)
+					context.getSourceIn().close();
+			} catch (IOException ignored) {
+				// nothing left to close
+			}
+			temp.delete();
+			CobolParserTokenManager.commentLines.clear();
+			CobolParserTokenManager.lastToken = null;
+			SymbolTable.clear();
+			fileLst = null;
+			srcF = null;
+		}
+	}
+
 	private CobolParser cobolParser = null;
 
 	public CompilationUnit parse(RESContext context) {
@@ -271,6 +351,13 @@ public class Main {
 			context.getCharStream().Done();
 			cobolParser = null;
 		} catch (ParseException pe) {
+			if (projectMode) {
+				int errorLine = -1;
+				if (pe.currentToken != null && pe.currentToken.next != null)
+					errorLine = pe.currentToken.next.beginLine;
+				throw new CobolTranslationException("Syntax error: " + firstLine(pe.getMessage()),
+						srcF == null ? null : srcF.getPath(), errorLine, pe);
+			}
 			pe.printStackTrace();
 			unit = null;
 		} catch (UnsupportedEncodingException e) {
@@ -280,6 +367,23 @@ public class Main {
 		return unit;
 	}
 
+	/** The first reported problem (with its line), noting how many more there are. */
+	private static CobolTranslationException errorFromDiagnostics(String fallback, String file) {
+		java.util.List<com.res.common.Diagnostics.Entry> all = com.res.common.Diagnostics.entries();
+		if (all.isEmpty())
+			return new CobolTranslationException(fallback, file, -1);
+		com.res.common.Diagnostics.Entry first = all.get(0);
+		return new CobolTranslationException(first.message + (all.size() > 1 ? " (and " + (all.size() - 1) + " more)" : ""),
+				file, first.line);
+	}
+
+	private static String firstLine(String message) {
+		if (message == null)
+			return "";
+		int newline = message.indexOf('\n');
+		return (newline < 0 ? message : message.substring(0, newline)).trim();
+	}
+
 	public void translate(CompilationUnit unit) {
 
 		try {
@@ -287,6 +391,9 @@ public class Main {
 			unit.accept(CobolFillTable.getInstance());
 			if (RESConfig.getInstance().isInError()) {
 				System.out.println("Errors encountered. Processing terminated.");
+				if (projectMode)
+					throw errorFromDiagnostics("Errors found while building the symbol table",
+							srcF == null ? null : srcF.getPath());
 				return;
 			}
 			
@@ -345,7 +452,13 @@ public class Main {
 			if (config.isToGenVSAMISAMDb())
 				genDB(unit);
 
+		} catch (CobolTranslationException ex) {
+			if (projectMode)
+				throw ex;
+			ex.printStackTrace();
 		} catch (Exception ex) {
+			if (projectMode)
+				throw new CobolTranslationException(String.valueOf(ex), srcF == null ? null : srcF.getPath(), -1, ex);
 			ex.printStackTrace();
 		}
 
@@ -498,9 +611,35 @@ public class Main {
 				else
 					context.setTraceLevel(3);
 				context.setTraceOn(true);
+			} else if (args[i].substring(1).equalsIgnoreCase("project")) {
+				if (++i >= args.length || args[i].startsWith("-"))
+					break;
+				projectRoot = args[i];
+				projectMode = true;
+			} else if (args[i].substring(1).equalsIgnoreCase("basePackage")) {
+				if (++i >= args.length || args[i].startsWith("-"))
+					break;
+				basePackage = args[i];
+			} else if (args[i].substring(1).equalsIgnoreCase("encoding")) {
+				if (++i >= args.length || args[i].startsWith("-"))
+					break;
+				try {
+					sourceCharset = java.nio.charset.Charset.forName(args[i]);
+				} catch (IllegalArgumentException e) {
+					throw new CobolTranslationException("Unknown encoding: " + args[i]);
+				}
+			} else if (args[i].substring(1).equalsIgnoreCase("I")) {
+				if (++i >= args.length || args[i].startsWith("-"))
+					break;
+				for (String dir : args[i].split(java.util.regex.Pattern.quote(File.pathSeparator)))
+					includeDirs.add(new File(dir));
+			} else if (args[i].substring(1).equalsIgnoreCase("scaffold")) {
+				scaffold = true;
 			} else
 				displayProgramUsageAndExit();
 		}
+		if (projectRoot != null)
+			return i;
 		if (i >= args.length)
 			Main.displayProgramUsageAndExit();
 
@@ -578,7 +717,7 @@ public class Main {
 		System.out.println("\t    Default is ASSIGN name of generated file.");
 		System.out.println("\n\t-readback\t: read back from DB and compare for validation.");
 		System.out.println("\nThese options use DB configuraion in RunConfig.properties file.");
-		System.exit(1);
+		throw new CobolTranslationException("Invalid command line");
 	}
 
 	public static void deleteFolder(File folder) {

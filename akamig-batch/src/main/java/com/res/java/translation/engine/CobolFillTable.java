@@ -1932,12 +1932,14 @@ public class CobolFillTable extends DepthFirstVisitor {
 		isStatementInError=true;
 		RESConfig.getInstance().setInError(true);
 		System.out.println("@CobolSourceFile(\""+((RESNode)n).sourceFile+"\","+String.valueOf(firstTokenInStatement.beginLine)+"):"+msg);
+		com.res.common.Diagnostics.add(msg, firstTokenInStatement.beginLine);
 	}
 
 	public void reportError(String msg) {
 		isStatementInError=true;
 		RESConfig.getInstance().setInError(true);
 		System.out.println("@CobolSourceFile():"+msg);
+		com.res.common.Diagnostics.add(msg, -1);
 	}
 
 	
