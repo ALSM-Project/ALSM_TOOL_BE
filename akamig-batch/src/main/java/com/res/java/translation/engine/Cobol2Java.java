@@ -1,4 +1,5 @@
 package com.res.java.translation.engine;
+import com.res.common.CobolTranslationException;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -1446,7 +1447,13 @@ public class Cobol2Java extends DepthFirstVisitor {
 		//Integer paragraphMarkInteger=(Integer)props.getParagraphMark();
 		//if(paragraphMarkInteger==null||paragraphMarkInteger.intValue()<=0) return;
 		// TuNT1 sourceLst.add("return "+props.getJavaName1()+";");
-		sourceLst.add(props.getJavaName1()+"();");
+		// GO TO does not come back. A paragraph-name-EXIT is the end of a PERFORM ... THRU range
+		// and is not emitted as a method, so going there is leaving the current paragraph; any
+		// other target runs and then the current paragraph ends too. "if (true)" keeps javac from
+		// rejecting the dead statements COBOL allows after a GO TO.
+		if(!props.getDataName().contains("-EXIT"))
+			sourceLst.add(props.getJavaName1()+"();");
+		sourceLst.add("if (true) return;");
 	}
 
 	@Override
@@ -3899,12 +3906,12 @@ public class Cobol2Java extends DepthFirstVisitor {
 
 	public void reportError(Node n,String msg) {
 		System.out.println("@CobolSourceFile(\""+((RESNode)n).sourceFile+"\","+((RESNode)n).line+"):"+msg);
-		System.exit(0);
+		throw new CobolTranslationException(msg, ((RESNode)n).sourceFile, ((RESNode)n).line);
 	}
 	
 	public void reportError(Node n,String msg,boolean exit) {
 		System.out.println("@CobolSourceFile(\""+((RESNode)n).sourceFile+"\","+((RESNode)n).line+"):"+msg);
-		if(exit)System.exit(0);
+		if(exit) throw new CobolTranslationException(msg, ((RESNode)n).sourceFile, ((RESNode)n).line);
 	}
 
 	public  SymbolProperties getCurrentProgram() {
@@ -4437,7 +4444,16 @@ public class Cobol2Java extends DepthFirstVisitor {
 		if (strMainFunction != null)
 			classLst.add(strMainFunction + "();");
 		else
-			classLst.addAll(sourceLstFirst);
+			// The first paragraph runs inline in execute(), which returns a RepeatStatus.
+			for (String line : sourceLstFirst) {
+				String trimmed = line.trim();
+				if (trimmed.equals("return ;") || trimmed.equals("return;"))
+					classLst.add(line.replace(trimmed, "if (true) return RepeatStatus.FINISHED;"));
+				else if (trimmed.equals("if (true) return;"))
+					classLst.add(line.replace(trimmed, "if (true) return RepeatStatus.FINISHED;"));
+				else
+					classLst.add(line);
+			}
 		// classLst.add("init();");
 		// classLst.add("while (true) {");
 		// classLst.add("tab()");

@@ -1,4 +1,5 @@
 package com.res.java.translation.symbol;
+import com.res.common.CobolTranslationException;
 
 
 import java.util.ArrayList;
@@ -1910,6 +1911,13 @@ public class SymbolUtil {
 					} else {
 						idx1 = idx2 - reference.getLength();
 					}
+					// The redefining item reads and writes the same bytes as the one it redefines:
+					// both are views on this group's Record, so a MOVE to one shows in the other.
+					if (child.getPictureString() != null && !child.getJavaName1().toLowerCase().startsWith("filler")) {
+						recordLst = printVar(child, recordLst);
+						recordContr = printConstructor(child, recordContr, child.getOffset(), child.getOffset() + child.getLength());
+						methodLst = printSetGetVar(child, methodLst, false);
+					}
 				}
 				/* 20210831 Add E */
 				if (child.hasChildren()) {
@@ -2055,6 +2063,12 @@ public class SymbolUtil {
 					idx11 = idx22 - reference.getJavaType().maxStringLength;
 				} else {
 					idx11 = idx22 - reference.getLength();
+				}
+				// Same bytes as the redefined item (see the 01-group loop).
+				if (child.getPictureString() != null && !child.getJavaName1().toLowerCase().startsWith("filler")) {
+					recordLst = printVar(child, recordLst);
+					recordContr = printConstructor(child, recordContr, child.getOffset(), child.getOffset() + child.getLength());
+					methodLst = printSetGetVar(child, methodLst, false);
 				}
 			}
 			/* 20210831 Add E */
@@ -2612,24 +2626,20 @@ private void printSetGetGroup( SymbolProperties props) {
 	}
 	
 	public static void reportError() {
-		try{
-			throw new InvalidCobolFormatException("");
-		} catch(Exception e) {
-			e.printStackTrace();
-			System.exit(-1);
-		}
+		throw new CobolTranslationException("Invalid COBOL format");
 	}
 
 	public void reportError(SymbolProperties props,String msg) {
 		System.out.println("@CobolSourceFile(\""+props.getDataDescriptionEntry().sourceFile+"\","+
 				props.getDataDescriptionEntry().line+
 				"):"+msg);
-		System.exit(0);
+		throw new CobolTranslationException(msg, props.getDataDescriptionEntry().sourceFile,
+				props.getDataDescriptionEntry().line);
 	}
 	
 	public void reportError(String msg) {
 		System.out.println("@CobolSourceFile(\""+Main.getContext().getSourceFileName()+"):"+msg);
-		System.exit(0);
+		throw new CobolTranslationException(msg, Main.getContext().getSourceFileName(), -1);
 	}
 	/**
 	 * A copybook is imported as a ready-made model class from the runtime's common.model package
