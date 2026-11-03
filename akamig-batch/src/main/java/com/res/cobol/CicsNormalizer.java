@@ -620,8 +620,20 @@ public final class CicsNormalizer {
 		String[] original = source.split("\r?\n", -1);
 		List<Change> changes = new ArrayList<Change>();
 		List<String> working = new ArrayList<String>();
-		for (int i = 0; i < original.length; i++)
-			working.add(removeSeparatorCommas(inlineDfhresp(original[i], i + 1, changes), i + 1, changes));
+		// Inside EXEC SQL ... END-EXEC a comma separates columns and host variables: it is SQL, and
+		// dropping it turned INTO :A, :B into a host variable with an indicator.
+		boolean inSql = false;
+		for (int i = 0; i < original.length; i++) {
+			String area = codeArea(original[i]).toUpperCase(Locale.ROOT);
+			boolean startsSql = area.matches(".*\\bEXEC\\s+SQL\\b.*");
+			boolean sqlLine = inSql || startsSql;
+			String line = inlineDfhresp(original[i], i + 1, changes);
+			working.add(sqlLine ? line : removeSeparatorCommas(line, i + 1, changes));
+			if (startsSql)
+				inSql = true;
+			if (inSql && area.matches(".*\\bEND-EXEC\\b.*"))
+				inSql = false;
+		}
 		removeEmptyInputOutputSection(working, changes);
 
 		// Code areas joined with '\n', so a block spanning lines is one match and a stream offset

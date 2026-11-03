@@ -127,9 +127,19 @@ public class ExecSql2Java extends DepthFirstVisitor {
 			}
 		}
 	}
+	private java.util.List<Node> declaredCursors = null;
+	/** While a cursor is OPENed: the DECLARE to write out, the others are skipped. */
+	private String declaringCursor = null;
+
+	public void setDeclaredCursors(java.util.List<Node> declarations) {
+		declaredCursors = declarations;
+	}
+
 	public void visit(DeclareCursorStatement n)
 	{
 		String cursorName=n.nodeToken1.tokenImage;
+		if(declaringCursor!=null&&!formatCursorName(cursorName).equals(declaringCursor))
+			return;
 		switch(n.nodeChoice.which) {
 		case 0:
 			String statementName=((NodeToken)n.nodeChoice.choice).tokenImage;
@@ -314,6 +324,16 @@ public class ExecSql2Java extends DepthFirstVisitor {
 
 	@Override
 	public void visit(SQLOpenStatement n) {
+		String opened=formatCursorName(getSQLString(n.relObjectName));
+		if(declaredCursors!=null) {
+			declaringCursor=opened;
+			try {
+				for(Node declaration:declaredCursors)
+					declaration.accept(this);
+			} finally {
+				declaringCursor=null;
+			}
+		}
 		printProgramExceptionHdr();
 		sourceLst.add("__dao().executeStatement(" +
 				formatCursorName(getSQLString(n.relObjectName)) +
@@ -392,7 +412,10 @@ public class ExecSql2Java extends DepthFirstVisitor {
 		setParameters(sql); 
 	
 		if(cursorName!=null) {
+			// A cursor is only kept here; OPEN runs it and FETCH reads it.
 			sourceLst.add("__dao().saveStatement("+formatCursorName(cursorName)+");");
+			printProgramExceptionTail();
+			return;
 		}
 		
 		sourceLst.add("__dao().executeQuery();");
@@ -528,10 +551,32 @@ public class ExecSql2Java extends DepthFirstVisitor {
 		sourceLst.add("tab()");
 	}
 	
+	/**
+	 * Every SQL statement ends by setting SQLCODE (0, +100 for no row, negative on error) when the
+	 * program includes SQLCA: programs loop on it (PERFORM UNTIL SQLCODE NOT = 0), and without it
+	 * such a loop never ended. A non-SQL failure stops the job instead of the whole JVM.
+	 */
 	private void printProgramExceptionTail() {
+		String sqlcode = sqlcodeSetter();
+		if (sqlcode != null)
+			sourceLst.add(sqlcode.replace("%0", "__dao().getSqlCode()") + ";");
 		sourceLst.add("backTab()");
-		sourceLst.add("} catch(SQLException se) { se.printStackTrace(); ");
-		sourceLst.add("} catch(Exception e) { e.printStackTrace(); System.exit(1); }");
+		sourceLst.add("} catch(SQLException se) {");
+		sourceLst.add("tab()");
+		if (sqlcode != null)
+			sourceLst.add(sqlcode.replace("%0", "__dao().sqlCodeOf(se)") + ";");
+		else
+			sourceLst.add("se.printStackTrace();");
+		sourceLst.add("backTab()");
+		sourceLst.add("} catch(Exception e) { throw new RuntimeException(e); }");
+	}
+
+	/** Setter template (%0) of the program's SQLCODE, or null when it includes no SQLCA. */
+	private String sqlcodeSetter() {
+		SymbolProperties sqlcode = SymbolTable.getScope().lookup("SQLCODE", SymbolConstants.DATA);
+		if (sqlcode == null)
+			return null;
+		return NameUtil.getJavaName(sqlcode, true);
 	}
 	
 	private String getSQLString(Node... n) {

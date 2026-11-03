@@ -799,7 +799,10 @@ public class CobolFillTable extends DepthFirstVisitor {
 		if(RESConfig.getInstance().isAllSymbols())
 			props.setRef(true);
 		
-		if(dataName.equalsIgnoreCase("SQLCA")&&props.getLevelNumber()==1&&pictureString==null) {
+		// SQLCA used to be replaced by a few synthetic fields and left to a runtime library that the
+		// export does not have; the SQLCA copybook (the project's or the supplied stand-in) is now
+		// translated like any other group, so model.getSqlca().getSqlcode() exists.
+		if(false&&dataName.equalsIgnoreCase("SQLCA")&&props.getLevelNumber()==1&&pictureString==null) {
 			props.setRef(false);props.setMod(false);props.setFromRESLibrary(true);
 			SymbolProperties tempProps=createDataSymbol("sqlcode",props,"9(8)",CobolSymbol.BINARY,02);
 			tempProps.setIsFormat(false);tempProps.setRef(true);

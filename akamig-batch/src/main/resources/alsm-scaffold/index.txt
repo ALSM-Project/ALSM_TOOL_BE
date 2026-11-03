@@ -14,6 +14,7 @@ src/main/java/jp/co/alsm/common/InvalidKeyException.java
 src/main/java/jp/co/alsm/common/OverflowException.java
 src/main/java/jp/co/alsm/common/Record.java
 src/main/java/jp/co/alsm/common/SqlDto.java
+src/main/java/jp/co/alsm/common/SqlSupport.java
 src/main/java/jp/co/alsm/common/TransactionHandler.java
 src/main/java/jp/co/alsm/config/ApplicationContextProvider.java
 src/main/java/jp/co/alsm/config/ApplicationProfile.java
