@@ -159,8 +159,18 @@ public class ProjectConverter {
 		writeReport(index, outcomes);
 		System.out.println("Converted " + ok + " of " + outcomes.size() + " program(s). Report: "
 				+ outputDir.resolve("conversion_report.md"));
-		if (scaffold)
-			System.out.println("Note: -scaffold is not available in this build; the Java sources were written to " + javaRoot);
+		if (scaffold) {
+			List<String> jobs = new ArrayList<String>();
+			String defaultJob = null;
+			for (Outcome outcome : outcomes) {
+				jobs.add(className(outcome.programId));
+				if (defaultJob == null && outcome.success && !outcome.subprogram)
+					defaultJob = className(outcome.programId);
+			}
+			String projectName = projectRoot.getFileName() == null ? "cobol-project" : projectRoot.getFileName().toString();
+			ProjectScaffold.write(outputDir, projectName, basePackage, jobs, defaultJob);
+			System.out.println("Maven project written to " + outputDir + " - build it with: mvn clean package -DskipTests");
+		}
 		return 0;
 	}
 
