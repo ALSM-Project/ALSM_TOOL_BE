@@ -676,11 +676,8 @@ public class Cobol2Java extends DepthFirstVisitor {
 					//new ExpressionString(props).toString());
 					line+= new ExpressionString(props).toString();					
 					//20210707 Update for error Display E					
-				} else 
-				if(props.getPictureString()==null&&props.getLevelNumber()==1){
-					String temp=new ExpressionString(props).toString();
-					line+=temp.substring(0,temp.lastIndexOf('.')+1)+props.getJavaName1()+".toString()";
 				} else {
+					// A 01 group already comes out of NameUtil as model.getX().toString().
 					line+=new ExpressionString(props).toString();
 				}
 				break;
@@ -2372,38 +2369,22 @@ public class Cobol2Java extends DepthFirstVisitor {
 		isPreviousRelationCondition=false;
 		n.identifier.accept(this);
 		StringBuffer name=new StringBuffer(new ExpressionString(props).toString());
-		int begin=name.lastIndexOf(".")+1;
-		int end = name.indexOf("(");
-
-		if (end < begin)
-		{
-		   end = name.lastIndexOf("(");
-		}
-
+		// The class tests are library calls on the value's text. They used to be a rename of the
+		// last getter in the expression (getX() -> isXNumeric()), which only worked for a bare getX()
+		// and broke on model.getX().toString().
+		String subject="String.valueOf("+name+")";
 		switch(n.nodeChoice.which){
 		case 0:
-			if(props.isNumericTested())
-				condition.push(name.replace(begin,end, "is"+props.getJavaName2()+"Numeric").toString());
-			else
-				condition.push(name.toString());
+			condition.push("Compare.isNumeric("+subject+")");
 			break;
 		case 1:
-			if(props.isAlphabeticTested())
-				condition.push(name.replace(begin,end, "is"+props.getJavaName2()+"Alphabetic").toString());
-			else
-				condition.push(name.toString());
+			condition.push("Compare.isAlphabetic("+subject+")");
 			break;
 		case 2:
-			if(props.isAlphabeticTested())
-				condition.push(name.replace(begin,end, "is"+props.getJavaName2()+"AlphabeticLower").toString());
-			else
-				condition.push(name.toString());
+			condition.push("Compare.isAlphabeticLower("+subject+")");
 			break;
 		case 3:
-			if(props.isAlphabeticTested())
-				condition.push(name.replace(begin,end, "is"+props.getJavaName2()+"AlphabeticUpper").toString());
-			else
-				condition.push(name.toString());
+			condition.push("Compare.isAlphabeticUpper("+subject+")");
 			break;
 		case 4:
 		case 5:
