@@ -547,7 +547,18 @@ public class Cobol2Java extends DepthFirstVisitor {
 		} else 
 			if(HEX_COBOL_PATTERN.matcher(lit).matches()) {
 				if(!doingArithmeticExpression) {
-					lit="Integer.toHexString(0"+lit.replace("\'", "").replace("\"","").replace('X','x')+')';
+					// X'000309D1...' is a string of the bytes written, however many there are. It used
+					// to become Integer.toHexString(0x...), the hex text of a 32-bit number, which does
+					// not even compile past 8 digits.
+					String hexDigits=lit.replaceFirst("^[Xx]","").replace("\'", "").replace("\"","");
+					if(hexDigits.length()%2==1) hexDigits="0"+hexDigits;
+					StringBuilder hexBytes=new StringBuilder("new String(new byte[]{");
+					for(int h=0;h<hexDigits.length();h+=2) {
+						if(h>0) hexBytes.append(',');
+						hexBytes.append("(byte)0x").append(hexDigits, h, h+2);
+					}
+					hexBytes.append("}, java.nio.charset.StandardCharsets.ISO_8859_1)");
+					lit=hexBytes.toString();
 					expressionType=CobolSymbol.STRING;
 				} else {
 					lit="0"+lit.replace("\'", "").replace("\"","").replace('X','x');
@@ -3348,7 +3359,9 @@ public class Cobol2Java extends DepthFirstVisitor {
 
 			int lvl=o1.getLevelNumber();
 
-			if(lvl!=88||!(o1.getParent().getRef()||o1.getParent().getMod())) return;
+			// The condition-name itself may be the only thing the program refers to (IF WS-X-OK),
+			// leaving its parent item unreferenced.
+			if(lvl!=88||!(o1.getParent().getRef()||o1.getParent().getMod()||o1.getRef()||o1.getMod())) return;
 
 			if(o1.getValues()==null||o1.getValues().size()<=0) return;
 			String getSubscripts="";

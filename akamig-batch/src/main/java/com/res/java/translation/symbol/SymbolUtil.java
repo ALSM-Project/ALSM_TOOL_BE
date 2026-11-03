@@ -1857,6 +1857,11 @@ public class SymbolUtil {
 			recordContr.add("public " +props.getJavaName2() +"() {");
 			recordContr.add("tab()");
 			for (SymbolProperties child : childSP) {
+				// A condition-name under an item of the group is a getter on the Tasklet, not a field.
+				if (child.getLevelNumber() == 88) {
+					Cobol2Java.getInstance().doOne88(child);
+					continue;
+				}
 				if (child.isOccurs()) {
 					idx = 0;
 					occursShori(child);
@@ -2002,6 +2007,10 @@ public class SymbolUtil {
 		int idx11 = idx1;
 		int idx22 = 0;
 		for (SymbolProperties child : props.getChildren()) {
+			if (child.getLevelNumber() == 88) {
+				Cobol2Java.getInstance().doOne88(child);
+				continue;
+			}
 			if (child.isOccurs()) {
 				idx = idx11;
 				occursShori(child);

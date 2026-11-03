@@ -77,6 +77,11 @@ public class NameUtil {
 		if(props2.getIsFiller())
 			if(!lastSet) return SymbolUtil.getInstance().getFillerGetter(props2);
 			else return SymbolUtil.getInstance().getFillerSetter(props2, "%0");
+
+		// A condition-name (level 88) is a boolean getter on the Tasklet whichever group it sits
+		// in (see doOne88); it is not reached through the model's accessor chain.
+		if(props2.getLevelNumber()==88&&!lastSet)
+			return "get"+getJavaName2(props2)+"("+getJavaIndexes(props2)+")";
 		
 		SymbolProperties props;
 		String s = "";	
