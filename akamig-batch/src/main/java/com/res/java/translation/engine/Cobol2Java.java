@@ -315,6 +315,20 @@ public class Cobol2Java extends DepthFirstVisitor {
 			processUsingArgs1(nodelist);
 		} 
 		 Delete 20210827 E */
+		// PROCEDURE DIVISION USING a b c: the LINKAGE items a caller's CALL ... USING binds to,
+		// in order (written into the call__ entry point by printTaskletDeclare).
+		procedureUsing.clear();
+		if(n.nodeOptional.present()) {
+			NodeList usingNodes = ((UsingArgs)((NodeSequence)n.nodeOptional.node).elementAt(1)).nodeList;
+			for(Enumeration<Node> e=usingNodes.elements();e.hasMoreElements();) {
+				props=null;
+				e.nextElement().accept(this);
+				if(props!=null)
+					procedureUsing.add(new String[] { NameUtil.getJavaName(props,false),
+							NameUtil.getJavaName(props,true), callConversion(props) });
+			}
+			props=null;
+		}
         if(delayedStatements!=null)
         	for(Node nd:delayedStatements) {
         		nd.accept(execSql2Java);
@@ -620,8 +634,12 @@ public class Cobol2Java extends DepthFirstVisitor {
 													// "mod").
 													int argsAt=litC.literal.indexOf("(");
 													String arguments=argsAt<0?"()":litC.literal.substring(argsAt);
+													String function=SymbolConstants.getFunction(idx);
+													// HIGH-VALUES / LOW-VALUES travel through the same table.
+													if(function.equals("Constant.MAX_VALUE")) function="highValues";
+													else if(function.equals("Constant.MIN_VALUE")) function="lowValues";
 													litC.literal =litC.literal.replace(0, litC.literal.length(),
-															"CobolFunction."+SymbolConstants.getFunction(idx)+arguments);
+															"CobolFunction."+function+arguments);
 													//Update 20210625 E
 													expressionType=Math.max(litC.type,expressionType);
 													litC.type=expressionType;
@@ -3358,6 +3376,23 @@ public class Cobol2Java extends DepthFirstVisitor {
 	/** Level-88 condition getters waiting to be written into the generated class body. */
 	public static final ArrayList<String> level88Getters = new ArrayList<String>();
 
+	/** USING items of the program being translated: getter, setter template (%0), conversion. */
+	public static final ArrayList<String[]> procedureUsing = new ArrayList<String[]>();
+
+	/** The CallSupport conversion that turns a passed value back into this item's Java type. */
+	static String callConversion(SymbolProperties item) {
+		if(item.getJavaType()==null||item.getPictureString()==null) return "asString";
+		switch(item.getJavaType().type) {
+		case CobolSymbol.SHORT:
+		case CobolSymbol.INTEGER: return "asInt";
+		case CobolSymbol.LONG: return "asLong";
+		case CobolSymbol.FLOAT:
+		case CobolSymbol.DOUBLE: return "asDouble";
+		case CobolSymbol.BIGDECIMAL: return "asBigDecimal";
+		default: return "asString";
+		}
+	}
+
 	public void doOne88(SymbolProperties o1) {
 		try{
 			if(o1==null) return;
@@ -3935,25 +3970,36 @@ public class Cobol2Java extends DepthFirstVisitor {
 			idOrLiteralList.clear();
 		else
 			idOrLiteralList=new Vector();
-		StringBuffer line=new StringBuffer("call");
-		StringBuffer argLine =new StringBuffer();
+		// CALL 'NAME' USING a b and CALL WS-NAME USING a b: the program is looked up by name at
+		// run time (CallSupport), the arguments go in an array the callee writes back into, and every
+		// argument that is a data item is copied back afterwards - COBOL passes BY REFERENCE.
+		props=null;literal=null;
 		n.nodeChoice.choice.accept(this);
-		switch(n.nodeChoice.which) {
-		case 0:
-			break;
-		case 1:
-			line.append(NameUtil.convertCobolNameToJava(formatLiteral(literal).toString().replaceAll("\"",""),true));
-			line.append("();");
-			break;
-		}
-		sourceLst.add(line.toString());
+		String program;
+		if(n.nodeChoice.which==0&&props!=null)
+			program="String.valueOf("+new ExpressionString(props).toString()+")";
+		else
+			program="\""+RunTimeUtil.getInstance().stripQuotes(formatLiteral(literal).toString())+"\"";
 		n.nodeOptional.accept(this);
+		StringBuilder args=new StringBuilder();
+		ArrayList<String> copyBack=new ArrayList<String>();
+		int index=0;
 		for (Enumeration<IdOrLit> e = idOrLiteralList.elements(); e.hasMoreElements();) {
-			if (argLine.length()>0) argLine.append(";");
-			//line.append(',');
-			argLine.append(e.nextElement().get());
+			IdOrLit arg=e.nextElement();
+			if(args.length()>0) args.append(", ");
+			args.append(arg.get());
+			if(arg.Id()!=null&&arg.Id().getLevelNumber()!=88)
+				copyBack.add(NameUtil.getJavaName(arg.Id(),true).replace("%0",
+						"CallSupport."+callConversion(arg.Id())+"(callArgs__["+index+"])")+";");
+			index++;
 		}
-		taskletList.put(NameUtil.convertCobolNameToJava(formatLiteral(literal).toString().replaceAll("\"",""),true), argLine.toString());
+		sourceLst.add("{");
+		sourceLst.add("tab()");
+		sourceLst.add("Object[] callArgs__ = new Object[] { "+args+" };");
+		sourceLst.add("CallSupport.call("+program+", callArgs__);");
+		sourceLst.addAll(copyBack);
+		sourceLst.add("backTab()");
+		sourceLst.add("}");
 		/* TuNT1 S
 		doTry();
 		if(idOrLiteralList!=null)
@@ -4406,6 +4452,24 @@ public class Cobol2Java extends DepthFirstVisitor {
 		classLst.add("");
 		classLst.addAll(level88Getters);
 		level88Getters.clear();
+		// Entry point for CALL ... USING: the caller's values become this program's LINKAGE items,
+		// the program runs, and the items are handed back the same way.
+		classLst.add("/** Entry point used when another program CALLs this one (see CallSupport). */");
+		classLst.add("public void call__(Object[] args) throws Exception {");
+		classLst.add("tab()");
+		for (int i = 0; i < procedureUsing.size(); i++) {
+			String[] item = procedureUsing.get(i);
+			classLst.add("if (args.length > " + i + ") " + item[1].replace("%0", "CallSupport." + item[2] + "(args[" + i + "])") + ";");
+		}
+		classLst.add("execute(null, null);");
+		for (int i = 0; i < procedureUsing.size(); i++) {
+			String[] item = procedureUsing.get(i);
+			classLst.add("if (args.length > " + i + ") args[" + i + "] = " + item[0] + ";");
+		}
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("");
+		procedureUsing.clear();
 		// The RETURN-CODE special register is not a declared data item.
 		classLst.add("private int returnCode__;");
 		classLst.add("");
@@ -4441,6 +4505,12 @@ public class Cobol2Java extends DepthFirstVisitor {
 			classLst.add("");
 		}
 		classLst.add("//TODO Need to check called fuction");
+		// A PROCEDURE DIVISION without any paragraph name never reaches visit(Paragraph), so its
+		// statements were still in sourceLst and came out at class level, after execute().
+		if (strMainFunction == null && sourceLstFirst.isEmpty() && !sourceLst.isEmpty()) {
+			sourceLstFirst.addAll(sourceLst);
+			sourceLst.clear();
+		}
 		if (strMainFunction != null)
 			classLst.add(strMainFunction + "();");
 		else

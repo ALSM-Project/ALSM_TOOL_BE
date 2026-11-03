@@ -174,7 +174,7 @@ public class NameUtil {
 				// QuyTV add frefix "model.get" for get item from model
 				s+="model.get" + getJavaName2(props)+"()";
 				//s+=getJavaName2(props)+"()";
-				if(doRefModSet)	refModSet+=getJavaName1(props);
+				if(doRefModSet)	refModSet+="model.get"+getJavaName2(props)+"()";
 			}
 			else
 			if(!lastSet){

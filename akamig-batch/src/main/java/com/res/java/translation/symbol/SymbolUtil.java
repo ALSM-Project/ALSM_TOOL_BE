@@ -104,9 +104,11 @@ public class SymbolUtil {
 				}
 			}
 
+			java.util.Set<String> initialised = new java.util.HashSet<String>();
 			for(String item : constructorsLst){
 				if (item.equals("tab()")) ClassFile.tab();
 				else if (item.equals("backTab()")) ClassFile.backTab();
+				else if (item.trim().endsWith(";") && !initialised.add(item.trim())) continue;
 				else ClassFile.println(item);
 			}
 			ClassFile.backTab();
@@ -1735,6 +1737,19 @@ public class SymbolUtil {
 	 * @param props SymbolProperties
 	 * @param object Object
 	 */
+	/**
+	 * The VALUE of an elementary 01/77 item. It used to arrive only through printCobolByteAccessors,
+	 * which runs per item; for items after the first group the Model had already been written by
+	 * then, so WS-PGM PIC X(8) VALUE 'ADDONE' started out null. Duplicates are dropped on output.
+	 */
+	private void initialValue(SymbolProperties item) {
+		if (getOptionFormat(item).contains("COMP"))
+			return;
+		String value = getValue(item);
+		if (!value.isEmpty())
+			constructorsLst.add(value);
+	}
+
 	private void printModelAttrs(SymbolProperties props,boolean programScope) {
 		SymbolProperties tmpSymProp = props;
 		varLst.add("tab()");
@@ -1783,6 +1798,7 @@ public class SymbolUtil {
 					if (tmpSymProp.getPictureString() != null) {
 						if (tmpSymProp.getLevelNumber() == 1) {
 							varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
+							initialValue(tmpSymProp);
 						}
 					} else {
 						// Truong hop la bien level1 va la bien groups
@@ -1799,6 +1815,7 @@ public class SymbolUtil {
 				// Truong hop bien Level 1 la bien duoc gan kieu
 				if (tmpSymProp.getPictureString() != null) {
 					varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
+					initialValue(tmpSymProp);
 				} else {
 					// Truong hop la bien level1 va la bien groups
 					varLst.add("private " + tmpSymProp.getJavaName2() + " " + tmpSymProp.getJavaName1() + ";");
