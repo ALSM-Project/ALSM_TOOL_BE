@@ -136,6 +136,7 @@ public class SymbolUtil {
 				headerLst.add("");
 				headerLst.add("import org.springframework.stereotype.Component;");
 				headerLst.add("");
+				headerLst.add("import java.math.BigDecimal;");
 				headerLst.add("import jp.co.alsm.common.Constant;");
 				headerLst.add("import jp.co.alsm.common.Record;");
 				headerLst.add("import jp.co.alsm.helper.StringHelper;");
@@ -2077,7 +2078,79 @@ public class SymbolUtil {
 	{
 		CobolSymbol sym=(CobolSymbol) props.getJavaType();
 		String s=SymbolConstants.get(sym.type);
+		// A PIC X(1) item is kept as text: the generated code assigns it string literals
+		// ("N", "Y") and compares it with Compare.eq(String, String), never with a char.
+		if(s.equals("char")) s="String";
     	return s;
+	}
+
+	private static boolean isNumericJavaType(String type) {
+		return type.equals("byte")||type.equals("short")||type.equals("int")||type.equals("long")
+				||type.equals("float")||type.equals("double")||type.equals("BigDecimal");
+	}
+
+	/**
+	 * Getter and setters for one item of a group, over its Record. A numeric item reads as its
+	 * Java type and accepts any numeric value; a text item accepts numbers too (COBOL lets a
+	 * numeric literal be moved to an alphanumeric item), written left-justified as digits.
+	 */
+	private void addTypedAccessors(ArrayList<String> out, String javaName2, String rec, String type) {
+		String set=rec+".set(value, "+rec+".getOffset(), "+rec+".getEnd());";
+		out.add("");
+		if(isNumericJavaType(type)) {
+			String result;
+			if(type.equals("int")) result=rec+".toInt()";
+			else if(type.equals("long")) result=rec+".toLong()";
+			else if(type.equals("BigDecimal")) result=rec+".toBigDecimal()";
+			else if(type.equals("double")) result=rec+".toBigDecimal().doubleValue()";
+			else if(type.equals("float")) result=rec+".toBigDecimal().floatValue()";
+			else result="("+type+") "+rec+".toInt()";
+			out.add("public "+type+" get"+javaName2+"() {");
+			out.add("tab()");
+			out.add("return "+result+";");
+			out.add("backTab()");
+			out.add("}");
+			for(String t : new String[]{"int","long","BigDecimal","String"}) {
+				out.add("");
+				out.add("public void set"+javaName2+"("+t+" value) {");
+				out.add("tab()");
+				out.add(set);
+				out.add("backTab()");
+				out.add("}");
+			}
+			out.add("");
+			out.add("public void set"+javaName2+"(double value) {");
+			out.add("tab()");
+			out.add(rec+".set(BigDecimal.valueOf(value), "+rec+".getOffset(), "+rec+".getEnd());");
+			out.add("backTab()");
+			out.add("}");
+		} else {
+			out.add("public String get"+javaName2+"() {");
+			out.add("tab()");
+			out.add("return "+rec+".toString();");
+			out.add("backTab()");
+			out.add("}");
+			out.add("");
+			out.add("public void set"+javaName2+"(String value) {");
+			out.add("tab()");
+			out.add(set);
+			out.add("backTab()");
+			out.add("}");
+			for(String t : new String[]{"int","long","double"}) {
+				out.add("");
+				out.add("public void set"+javaName2+"("+t+" value) {");
+				out.add("tab()");
+				out.add("set"+javaName2+"(String.valueOf(value));");
+				out.add("backTab()");
+				out.add("}");
+			}
+			out.add("");
+			out.add("public void set"+javaName2+"(BigDecimal value) {");
+			out.add("tab()");
+			out.add("set"+javaName2+"(value.toPlainString());");
+			out.add("backTab()");
+			out.add("}");
+		}
 	}
 	private void ResetVar() {
 		recordLst =new ArrayList<String>();
@@ -2162,29 +2235,8 @@ public class SymbolUtil {
 		String javaName2=getName(child.getJavaName2());		
 		arrayLst.add("");
 		if (!isOccurChild) {
-			if (getJavaType1(child).equals("int")) {
-				arrayLst.add("public int get" + javaName2 + "() {");
-				arrayLst.add("tab()");
-				arrayLst.add("return " + javaName1 + ".toInt();");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(int value) {");
-				arrayLst.add("tab()");
-				arrayLst.add(javaName1 + ".set(value, " + javaName1 + ".getOffset(), "
-						+ javaName1 + ".getEnd());");
-			} else {
-				arrayLst.add("public String get" + javaName2 + "() {");
-				arrayLst.add("tab()");
-				arrayLst.add("return " + javaName1 + ".toString();");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(String value) {");
-				arrayLst.add("tab()");
-				arrayLst.add(javaName1 + ".set(value, " + javaName1 + ".getOffset(), "
-						+ javaName1 + ".getEnd());");
-			}
+			addTypedAccessors(arrayLst, javaName2, javaName1, getJavaType1(child));
+			return arrayLst;
 		} else {
 			if (getJavaType1(child).equals("int")) {
 				arrayLst.add("public int get" + javaName2 + "(int index) {");
@@ -2229,32 +2281,7 @@ public class SymbolUtil {
 	private ArrayList<String> printSetGetVar(SymbolProperties child, ArrayList<String> arrayLst) {
 		String javaName1=getName(child.getJavaName1());
 		String javaName2=getName(child.getJavaName2());		
-		arrayLst.add("");
-			if (getJavaType1(child).equals("int")) {
-				arrayLst.add("public int get" + javaName2 + "() {");
-				arrayLst.add("tab()");
-				arrayLst.add("return record" + javaName2 + ".toInt();");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(int value) {");
-				arrayLst.add("tab()");
-				arrayLst.add("record" + javaName2 + ".set(value, record" + javaName2 + ".getOffset(), record"
-						+ javaName2 + ".getEnd());");
-			} else {
-				arrayLst.add("public String get" + javaName2 + "() {");
-				arrayLst.add("tab()");
-				arrayLst.add("return record" + javaName2 + ".toString();");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(String value) {");
-				arrayLst.add("tab()");
-				arrayLst.add("record" + javaName2 + ".set(value, record" + javaName2 + ".getOffset(), record"
-						+ javaName2 + ".getEnd());");
-			}
-		arrayLst.add("backTab()");
-		arrayLst.add("}");
+		addTypedAccessors(arrayLst, javaName2, "record" + javaName2, getJavaType1(child));
 		return arrayLst;
 	}
 
