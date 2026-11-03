@@ -50,9 +50,9 @@ public class Record implements CharSequence, Serializable {
 
 	public void set(int value, int start, int end) {
 		if ("COMP".equals(option)) {
-			set(compPacked(value, end - start), start, end);
+			set(compPacked(truncated(value), end - start), start, end);
 		} else if ("COMP-3".equals(option)) {
-			set(comp3Packed(value, end - start, format.indexOf("S") > -1), start, end);
+			set(comp3Packed(truncated(value), end - start, format.indexOf("S") > -1), start, end);
 		} else {
 			setDisplay(BigDecimal.valueOf(value), start, end);
 		}
@@ -60,9 +60,9 @@ public class Record implements CharSequence, Serializable {
 
 	public void set(long value, int start, int end) {
 		if ("COMP".equals(option)) {
-			set(compPacked(value, end - start), start, end);
+			set(compPacked(truncated(value), end - start), start, end);
 		} else if ("COMP-3".equals(option)) {
-			set(comp3Packed(value, end - start, format.indexOf("S") > -1), start, end);
+			set(comp3Packed(truncated(value), end - start, format.indexOf("S") > -1), start, end);
 		} else {
 			setDisplay(BigDecimal.valueOf(value), start, end);
 		}
@@ -286,9 +286,40 @@ public class Record implements CharSequence, Serializable {
 		return parser.longValue();
 	}
 
+	/**
+	 * A binary or packed item keeps only the digits of its picture (COBOL's TRUNC(STD)): 12345 moved
+	 * to PIC 9(4) COMP is 2345. Without it a growing counter overflowed the field's bytes.
+	 */
+	private static final java.util.regex.Pattern DIGITS = java.util.regex.Pattern.compile("9\\((\\d+)\\)|9");
+	/** 10^digits of the picture, 0 when it does not limit the value; computed once per format. */
+	private long digitLimit = -1;
+	private String limitFormat;
+
+	private long truncated(long value) {
+		if (format == null)
+			return value;
+		if (digitLimit < 0 || !format.equals(limitFormat)) {
+			int digits = 0;
+			java.util.regex.Matcher m = DIGITS.matcher(format);
+			while (m.find())
+				digits += m.group(1) == null ? 1 : Integer.parseInt(m.group(1));
+			long limit = 0;
+			if (digits > 0 && digits < 19) {
+				limit = 1;
+				for (int i = 0; i < digits; i++)
+					limit *= 10;
+			}
+			digitLimit = limit;
+			limitFormat = format;
+		}
+		return digitLimit == 0 ? value : value % digitLimit;
+	}
+
 	private static byte[] compPacked(long number, int byteCount) {
 		BigInteger parser = new BigInteger(String.valueOf(number));
-		byte[] real = parser.toByteArray();
+		byte[] full = parser.toByteArray();
+		// Keep the low-order bytes when the number is wider than the field.
+		byte[] real = full.length > byteCount ? java.util.Arrays.copyOfRange(full, full.length - byteCount, full.length) : full;
 		byte[] data = new byte[byteCount];
 		int shift = data.length - real.length;
 		for (int i = 0; i < real.length; i++) {
