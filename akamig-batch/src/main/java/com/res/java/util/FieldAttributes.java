@@ -242,6 +242,35 @@ public class FieldAttributes {
   }
 	
 	//Update further
+	/** Number of characters a numeric-edited picture occupies, or -1 when the picture is not edited. */
+	static int editedLength(String picture) {
+		if(picture==null) return -1;
+		String pic=picture.toUpperCase();
+		if(pic.startsWith("X")||pic.startsWith("A")) return -1;
+		boolean edited=pic.indexOf('.')>=0||pic.indexOf(',')>=0||pic.indexOf('Z')>=0||pic.indexOf('*')>=0
+				||pic.indexOf('$')>=0||pic.indexOf('B')>=0||pic.indexOf('/')>=0||pic.indexOf('+')>=0
+				||pic.indexOf('-')>=0||pic.contains("CR")||pic.contains("DB");
+		if(!edited) return -1;
+		int count=0;
+		for(int i=0;i<pic.length();++i) {
+			char c=pic.charAt(i);
+			int repeat=1;
+			if(i+1<pic.length()&&pic.charAt(i+1)=='(') {
+				int close=pic.indexOf(')',i+2);
+				if(close<0) return -1;
+				try {
+					repeat=Integer.parseInt(pic.substring(i+2,close).trim());
+				} catch(NumberFormatException e) {
+					return -1;
+				}
+				i=close;
+			}
+			// V (implied point), S (sign) and P (scaling) occupy no storage.
+			if(c!='V'&&c!='S'&&c!='P') count+=repeat;
+		}
+		return count;
+	}
+
 	public static int calculateLength(SymbolProperties props) {
 			
     	int len=0;
@@ -304,6 +333,12 @@ public class FieldAttributes {
 				break;
 			case CobolSymbol.DISPLAY:
 				props.setAdjustedLength(len);
+				// A numeric-edited picture (999999.99, ZZ,ZZ9.99, $9(5).99CR) stores every printed
+				// character - the decimal point, commas, floating symbols - not just the digits.
+				int printed=editedLength(props.getPictureString());
+				if(printed>0)
+					len=printed;
+				else
 				if(sym.isSigned)
 					len++;
 				if(len>=1&&len<=4) {

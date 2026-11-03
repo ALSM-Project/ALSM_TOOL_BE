@@ -1890,7 +1890,9 @@ public class SymbolUtil {
 							idx2 = idx1 + child.getLength();
 						}
 						/* Update 20210831 E */
-
+						// A FILLER has no accessors, but its VALUE ("  | ") is part of the record.
+						String fillerInit = fillerInitialiser(child, idx1, idx2);
+						if (!fillerInit.isEmpty()) recordContr.add(fillerInit);
 					}
 				/* 20210831 Add S */
 				}
@@ -1913,7 +1915,7 @@ public class SymbolUtil {
 			// The buffer holds the whole group: its declared length, or the end of its last child
 			// when OCCURS items push the layout past that. "Length" was never declared anywhere.
 			int recordLength = Math.max(Math.max(props.getAdjustedLength(), props.getLength()), idx2);
-			recordLst.add("private Record record = new Record(new byte[" + recordLength + "]);");
+			recordLst.add("private Record record = new Record(Record.spaces(" + recordLength + "));");
 			/* 20280831 Add S */
 			recordLst.add("public byte[] getDatas() {");
 			recordLst.add("tab()");
@@ -2275,6 +2277,18 @@ public class SymbolUtil {
 		}
 		return strRet;
 	}
+	/** Statement that writes a FILLER's quoted VALUE into the group's record, or "" when it has none. */
+	private String fillerInitialiser(SymbolProperties child, int start, int end) {
+		ArrayList<SymbolProperties.CoupleValue> values = child.getValues();
+		if (values == null || values.isEmpty()) return "";
+		String literal = values.get(0).value1.toString();
+		if (literal.length() < 2 || !(literal.startsWith("\"") && literal.endsWith("\"")
+				|| literal.startsWith("'") && literal.endsWith("'")))
+			return "";
+		literal = literal.substring(1, literal.length() - 1);
+		return "record.set(\"" + literal.replace("\\", "\\\\").replace("\"", "\\\"") + "\", " + start + ", " + end + ");";
+	}
+
 	private String getValue(SymbolProperties child) {
 		String strRet="";
 		ArrayList<SymbolProperties.CoupleValue> arrayValues = child.getValues();

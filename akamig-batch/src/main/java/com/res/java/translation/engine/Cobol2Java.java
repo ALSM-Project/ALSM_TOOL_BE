@@ -1372,6 +1372,14 @@ public class Cobol2Java extends DepthFirstVisitor {
 		SymbolProperties props2=null;
 		for(Enumeration<IdOrLit> e=exprLHS.elements();e.hasMoreElements();) {
 			IdOrLit idr=e.nextElement();
+			if(idr.isRounded()&&props2==null&&idr.Id().getJavaType()!=null) {
+				// COMPUTE X ROUNDED = ...: the result is rounded to the decimals of X instead of
+				// being cut off when it is stored. The flag used to be read and then ignored.
+				String top=expression.pop3();
+				int topType=expressionType;
+				expression.push("_Math.round("+top+","+String.valueOf(idr.Id().getJavaType().maxFractionLength)+")");
+				expressionType=topType;
+			}
 			String assign=TranslationTable.getInstance().getAssignString( idr.Id(), props2,false);
 			if(assign.length()>0) sourceLst.add(assign);
 			props2=idr.Id();
@@ -2125,7 +2133,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 					} while(i<literal.toString().length());
 					sub+=literal.toString();
 				}
-				propsDataName.getIndexesWorkSpace().add(sub);
+				// COBOL subscripts count from 1, the generated accessors from 0. A literal subscript
+				// is shifted in NameUtil.getJavaIndexes; a variable one (PERFORM VARYING WS-IDX) is
+				// shifted here, otherwise the first element is skipped and every other is off by one.
+				propsDataName.getIndexesWorkSpace().add("(" + sub + ") - 1");
 				break;
 			case 2:
 			}

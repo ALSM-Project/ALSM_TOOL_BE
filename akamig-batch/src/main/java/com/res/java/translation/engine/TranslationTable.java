@@ -576,12 +576,10 @@ public class TranslationTable {
 		}
 		Delete 20210624 E */
 		//Add 20210624 S
+		// The right operand used to be reduced by one whenever it was a number, as if every
+		// comparison were against a 1-based subscript: IF X > 3 became "> 2" and IF X > 0
+		// became "> -1". A comparison keeps the value the program wrote.
 		String tmp = expr2.toString();
-		if (NameUtil.isNumeric(tmp))
-		{
-			int idx= Integer.parseInt(tmp)-1;
-			tmp=String.valueOf(idx);
-		}
 		if(Math.max(expr1.type,expr2.type)<CobolSymbol.BIGDECIMAL) {
 			if((expr1.type==Constants.CHAR||expr2.type==Constants.CHAR)&&!(expr1.type==Constants.CHAR&&expr2.type==Constants.CHAR)) {
 				if(expr1.type==Constants.CHAR)
