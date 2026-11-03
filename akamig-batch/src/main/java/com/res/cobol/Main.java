@@ -313,6 +313,8 @@ public class Main {
 				// nothing left to close
 			}
 			temp.delete();
+			// After a failure part-way, half-written class files may still be open.
+			com.res.java.util.ClassFile.abandonAll();
 			CobolParserTokenManager.commentLines.clear();
 			CobolParserTokenManager.lastToken = null;
 			SymbolTable.clear();

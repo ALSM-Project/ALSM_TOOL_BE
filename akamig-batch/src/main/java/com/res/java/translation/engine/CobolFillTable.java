@@ -110,7 +110,8 @@ public class CobolFillTable extends DepthFirstVisitor {
 			if(file.getOtherData()!=null&&file.getOtherData().size()>0) {
 				ArrayList<Object> a = new ArrayList<Object>();
 				for(Object o:file.getOtherData()) {
-					o=SymbolTable.getScope().lookup((String)o,SymbolConstants.DATA);
+					if(o instanceof String)
+						o=SymbolTable.getScope().lookup((String)o,SymbolConstants.DATA);
 					if(o == null)reportError(n,"Invalid Alternat key in file "+ file.getDataName()+".");
 					else {
 						setRef(((SymbolProperties)o));
@@ -133,6 +134,11 @@ public class CobolFillTable extends DepthFirstVisitor {
 				}
 			}
 		}
+		// CobolFillTable is a singleton: without this the next program of the same run walked the
+		// files of this one again, whose keys were already resolved (ClassCastException).
+		filesToPostProcess.clear();
+		if(dependingOnToPostProcess!=null)
+			dependingOnToPostProcess.clear();
 	}
 
 	@Override

@@ -877,10 +877,11 @@ public class Preprocessor {
 	private final void outputAsComment(String line) {
 		if (source_format == Preprocessor.FORMAT_FIXED) {
 			output.print("      *>");
-			output.println(line.substring(7));
+			// Short lines occur here (a COPY whose copybook is missing): nothing past column 7 to keep.
+			output.println(line.length() > 7 ? line.substring(7) : "");
 		} else {
 			output.print("*> ");
-			output.println(line.substring(1));
+			output.println(line.length() > 1 ? line.substring(1) : "");
 		}
 	}
 
@@ -893,10 +894,11 @@ public class Preprocessor {
 	private final void outputComment(String line) {
 		if (source_format == Preprocessor.FORMAT_FIXED) {
 			output.print("      *>");
-			output.println(line.substring(7));
+			// Short lines occur here (a COPY whose copybook is missing): nothing past column 7 to keep.
+			output.println(line.length() > 7 ? line.substring(7) : "");
 		} else {
 			output.print("*> ");
-			output.println(line.substring(1));
+			output.println(line.length() > 1 ? line.substring(1) : "");
 		}
 	}
 
@@ -1311,6 +1313,9 @@ public class Preprocessor {
 			if (line_number > 0)
 				System.err.println("Exception at line " + line_number + " : " + line);
 			ex.printStackTrace();
+			// The output stops here; parsing it would translate half a program as if it were whole.
+			RESConfig.getInstance().setInError(true);
+			com.res.common.Diagnostics.add("Preprocessor failed: " + ex, line_number);
 			return;
 		}
 	}
