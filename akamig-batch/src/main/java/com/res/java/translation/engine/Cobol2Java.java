@@ -3338,109 +3338,63 @@ public class Cobol2Java extends DepthFirstVisitor {
 			return lit.toString();
 	}
 	
+	/** Level-88 condition getters waiting to be written into the generated class body. */
+	public static final ArrayList<String> level88Getters = new ArrayList<String>();
+
 	public void doOne88(SymbolProperties o1) {
-    	try{
-    		if(o1==null) return;
-    		if(o1.getIsSuppressed()) 
-    			return;
-    		
-	    	int lvl=o1.getLevelNumber();
-	    	
-	    	if(lvl!=88||!(o1.getParent().getRef()||o1.getParent().getMod())) return;
+		try{
+			if(o1==null) return;
+			if(o1.getIsSuppressed())
+				return;
 
-	    	if(o1.getValues()==null||o1.getValues().size()<=0) return;
-	    	String getSubscripts="";
-    		String accessSubscripts="";
-	    	if(o1.getParent().isOccurs()||o1.getParent().isAParentInOccurs()) {
-	    		int size;
-    			if(o1.getParent().getOccursParents()!=null&&(size=o1.getParent().getOccursParents().size())>0) {
-    				for(int i=1; i<=size;++i)  {
-    					getSubscripts+="int idx"+String.valueOf(i)+((i!=size)?",":"");
-    					accessSubscripts+="idx"+String.valueOf(i)+((i!=size)?",":"");
-   
-    				}
-    			}
-	    	}
-	    	
-	    	ClassFile.doMethodScope("public boolean get"+o1.getJavaName2()+"(" +getSubscripts+
-	    			") {");
-	    	sourceLst.add("tab()");
-	    	String retValue;
-	    	if(o1.getParent().getIsFiller()){
-	    		retValue=SymbolUtil.getInstance().getLocalFillerGetter(o1.getParent());
-	    	}
-	    	else {
-	    		retValue="get"+o1.getParent().getJavaName2()+"(" +accessSubscripts+
-	    				")";
-	    	}
-	    	retValue="equals("+retValue;
-	    	int numThrough=0;
+			int lvl=o1.getLevelNumber();
 
-	    	boolean foundPlain=false;
-	    	boolean first=true;
-			methodScope: {
-		    	for(SymbolProperties.CoupleValue values: o1.getValues()) {
-					if (values.value2!=null) {
-						++numThrough;
-						continue;
-					}
-					foundPlain=true;
-					retValue+=","+doOneAll(formatLiteral(values.value1),o1.getParent().getLength());
-		    	}
-		    	
-	    		if(numThrough>0) {
-			    	if(foundPlain) {
-			    		sourceLst.add("boolean b_="+retValue+");");
-			    	}
-			    	else {
-			    		
-			    	}
-	
-	    		} else {
-	    			if(foundPlain) {
-			    		sourceLst.add("return "+retValue+");");
-	    			}
-	    			else
-			    		sourceLst.add("return false;");
-		    		break methodScope;
-	    		}
-	    		first=true;
-		    	for(SymbolProperties.CoupleValue values: o1.getValues()) {
-					if (values.value2==null) {
-						continue;
-					}
-					if(first) {
-						if(numThrough==1) {
-							sourceLst.add("return equalsRange(get"+o1.getParent().getJavaName2()+"(" +accessSubscripts+
-									"),"+
-									doOneAll(formatLiteral(values.value1),o1.getParent().getLength())+","+
-									doOneAll(formatLiteral(values.value2),o1.getParent().getLength())+");");
-					    	//sourceLst.add("return b_;");
-				    		break methodScope;
-						}
-						if(!foundPlain) {
-								sourceLst.add("boolean b_=equalsRange(get"+o1.getParent().getJavaName2()+"(" +accessSubscripts+
-										"),"+
-										doOneAll(formatLiteral(values.value1),o1.getParent().getLength())+","+doOneAll(formatLiteral(values.value2),o1.getParent().getLength())+");");
-								foundPlain=true;
-								continue;
-						}
-					}
-					sourceLst.add("b_|=equalsRange(get"+o1.getParent().getJavaName2()+"(" +accessSubscripts+
-							"),"+
-							doOneAll(formatLiteral(values.value1),o1.getParent().getLength())+","+doOneAll(formatLiteral(values.value2),o1.getParent().getLength())+");");
-		    	}
-		    	sourceLst.add("return b_;");
-    		}
-	    	sourceLst.add("backTab()");
-	    	//ClassFile.endMethodScope();
-    	} catch(Exception e) {
-    		e.printStackTrace();
-    	}
-    	return ;
-    
+			if(lvl!=88||!(o1.getParent().getRef()||o1.getParent().getMod())) return;
+
+			if(o1.getValues()==null||o1.getValues().size()<=0) return;
+			String getSubscripts="";
+			if(o1.getParent().isOccurs()||o1.getParent().isAParentInOccurs()) {
+				int size;
+				if(o1.getParent().getOccursParents()!=null&&(size=o1.getParent().getOccursParents().size())>0) {
+					for(int i=1; i<=size;++i)
+						getSubscripts+="int idx"+String.valueOf(i)+((i!=size)?",":"");
+				}
+			}
+
+			// The whole getter is written here, header to closing brace. It used to be split: the
+			// header went to the class file and the body into sourceLst, which is flushed into
+			// whatever statement comes next - leaving a method with no body and a stray return
+			// inside execute(). Operands are rendered like every other condition (Compare.eq(...)),
+			// and the value is read through the same accessor chain (model.getX()).
+			String operand=NameUtil.getJavaName(o1.getParent(),false);
+			int length=o1.getParent().getLength();
+			StringBuilder condition=new StringBuilder();
+			for(SymbolProperties.CoupleValue values: o1.getValues()) {
+				String one;
+				String low=doOneAll(formatLiteral(values.value1),length);
+				if(values.value2==null) {
+					one="Compare.eq("+operand+","+low+")";
+				} else {
+					String high=doOneAll(formatLiteral(values.value2),length);
+					one="(Compare.ge("+operand+","+low+") && Compare.le("+operand+","+high+"))";
+				}
+				if(condition.length()>0) condition.append(" || ");
+				condition.append(one);
+			}
+
+			// Collected here and written into the Tasklet body by printTaskletDeclare: the data
+			// division is walked before the class is opened, so printing now lands above "package".
+			level88Getters.add("public boolean get"+o1.getJavaName2()+"(" +getSubscripts+") {");
+			level88Getters.add("\treturn "+condition+";");
+			level88Getters.add("}");
+			level88Getters.add("");
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+		return ;
+
 	}
-	
+
 	private ExecSql2Java execSql2Java = new ExecSql2Java(this);
 	
 	@Override
@@ -4442,6 +4396,8 @@ public class Cobol2Java extends DepthFirstVisitor {
 			}
 		}
 		classLst.add("");
+		classLst.addAll(level88Getters);
+		level88Getters.clear();
 		classLst.add("@Override");
 		classLst.add(
 				"public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {");
