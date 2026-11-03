@@ -2150,12 +2150,19 @@ public class SymbolUtil {
 	/** Same accessors as addTypedAccessors, for one element of an OCCURS table (index is 0-based). */
 	private void addTypedOccursAccessors(ArrayList<String> out, SymbolProperties child, String javaName2,
 			String type, int start, int length) {
-		String parent = child.getParent().getJavaName1();
+		addTypedOccursAccessors(out, child, javaName2, type, child.getParent().getJavaName1(),
+				child.getParent().getLength(), start, length);
+	}
+
+	/** Accessors for element index of a table held in the Record named table, one element every stride bytes. */
+	private void addTypedOccursAccessors(ArrayList<String> out, SymbolProperties child, String javaName2,
+			String type, String table, int stride, int start, int length) {
+		String parent = table;
 		String format = child.getPictureString() == null ? "X" : child.getPictureString();
 		String option = child.getDataUsage() == 20 ? ".withOption(\"COMP\")"
 				: child.getDataUsage() == 30 ? ".withOption(\"COMP-3\")" : "";
-		String cell = parent + ".subSequence(index * " + child.getParent().getLength() + " + " + start
-				+ ", index * " + child.getParent().getLength() + " + " + (start + length) + ").withFormat(\""
+		String cell = parent + ".subSequence(index * " + stride + " + " + start
+				+ ", index * " + stride + " + " + (start + length) + ").withFormat(\""
 				+ format + "\")" + option;
 		String set = "Record cell = " + cell + "; cell.set(value, cell.getOffset(), cell.getEnd());";
 		out.add("");
@@ -2294,12 +2301,26 @@ public class SymbolUtil {
 	//	strParent="";
 	//	idxFiller=1;
 	}
+	/** Length expression of the group being written when it ends in OCCURS DEPENDING ON. */
+	private String odoLength;
+
 	private void occursShori(SymbolProperties child) {
 		// Write for var
 		//idx =0;
 		recordLst = printVar(child, recordLst);
 		recordContr=printConstructor(child,recordContr,idx,child.getLength()*child.getMaxOccursInt()+idx);
-		methodLst=printSetGetVar(child,methodLst,false);
+		if (child.hasChildren()) {
+			methodLst=printSetGetVar(child,methodLst,false);
+		} else {
+			// An elementary item with OCCURS is itself the table: its accessors take the index.
+			addTypedOccursAccessors(methodLst, child, getName(child.getJavaName2()), getJavaType1(child),
+					child.getJavaName1(), child.getLength(), 0, child.getLength());
+		}
+		// OCCURS ... DEPENDING ON n: the group is only as long as its first n elements.
+		if (child.getDependingOnOccurs() != null) {
+			String counter = NameUtil.getJavaName(child.getDependingOnOccurs(), false).replaceFirst("^model\\.", "");
+			odoLength = idx + " + " + child.getLength() + " * Math.max(0, jp.co.alsm.config.CallSupport.asInt(" + counter + "))";
+		}
 		if (child.hasChildren()) {
 			printOccursNestedChild(child);
 		}
@@ -2459,7 +2480,12 @@ public class SymbolUtil {
 		setgetLst.add("");
 		setgetLst.add("public String toString() {");
 		setgetLst.add("tab()");
-		setgetLst.add("return record.toString();");
+		if (odoLength != null) {
+			setgetLst.add("String all = record.toString();");
+			setgetLst.add("return all.substring(0, Math.min(all.length(), " + odoLength + "));");
+			odoLength = null;
+		} else
+			setgetLst.add("return record.toString();");
 		setgetLst.add("backTab()");
 		setgetLst.add("}");
 	}
