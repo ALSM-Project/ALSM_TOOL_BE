@@ -103,10 +103,13 @@ public class NameUtil {
 					s+="set"+"(%0)";
 				}
 			} else {
+				// A 01 group lives in the Model as an inner class that renders as its text
+				// (toString) and is filled with write(String). These used to come out as bare
+				// getX()/setX(...) on the Tasklet, which has neither.
 				if(!lastSet) {
-					s="get"+getJavaName2(props2)+"()";
+					s="model.get"+getJavaName2(props2)+"().toString()";
 				} else {
-					s="set"+getJavaName2(props2)+"(%0)";
+					s="model.get"+getJavaName2(props2)+"().write(%0)";
 				}
 			}
 			if(NameUtil.appendInstance)

@@ -168,8 +168,12 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 			headerLst.add("import jp.co.alsm.common.Record;");
 			headerLst.add("import jp.co.alsm.common.Console;");
 			headerLst.add("import jp.co.alsm.common.FileRecord;");
+			headerLst.add("import jp.co.alsm.common.InvalidKeyException;");
 			headerLst.add("import jp.co.alsm.helper.Compare;");
-			headerLst.add("import jp.co.alsm.logging.Logger;");			
+			headerLst.add("import jp.co.alsm.helper._Math;");
+			headerLst.add("import jp.co.alsm.logging.Logger;");
+			headerLst.add("");
+			headerLst.add("import java.math.BigDecimal;");
 			headerLst.add("");			
 			headerLst.add("import lombok.Getter;");			
 			headerLst.add("import lombok.Setter;");
