@@ -1,4 +1,5 @@
 package com.res.java.translation.engine;
+import com.res.common.CobolTranslationException;
 /*****************************************************************************
 Copyright 2009 Venkat Krishnamurthy
 This file is part of RES.
@@ -376,7 +377,7 @@ public class ExecSql2Java extends DepthFirstVisitor {
 
 	public void reportError(Node n,String msg) {
 		System.out.println("@CobolSourceFile(\""+((RESNode)n).sourceFile+"\","+"):"+msg);
-		System.exit(1);
+		throw new CobolTranslationException(msg, ((RESNode)n).sourceFile, ((RESNode)n).line);
 	}
 
 	public ExecSql2Java(Cobol2Java from) {
