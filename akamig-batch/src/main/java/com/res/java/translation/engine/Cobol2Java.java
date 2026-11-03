@@ -3488,23 +3488,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 		props=fileProps.getChildren().get(0);
 		if(props.getLevelNumber()!=1) return;
 		doTry();
-		String assign=fileProps.getJavaName1()+".read";
-		if(fileProps.isIndexedFile()) {
-			if(n.nodeOptional.present()&&fileProps.getOtherData1()==Constants.DYNAMIC_ACCESS) {
-				assign+="Next";
-			}
-			assign+="()";
-		} else {
-			if(props.is01Group()) {
-				assign=assign+"("+props.getJavaName1();
-			} else {
-				assign=assign+"(super.getProgram().get()," +props.getOffset()+','+props.getLength();
-			}
-			if(fileProps.getOtherData2()!=null)
-				assign+="," +
-						NameUtil.getJavaName((SymbolProperties) fileProps.getOtherData2(),false);
-			assign+=")";
-		}
+		// The runtime FileRecord hands back the next record as text; it is stored into the
+		// file's record through the same accessor every other MOVE uses. (The original library
+		// bound a record to the file and read into it; FileRecord has no such binding.)
+		String assign=NameUtil.getJavaName(props,true).replace("%0",fileProps.getJavaName1()+".readRecord()");
 		sourceLst.add(assign+";");
 		if(n.nodeOptional2.present()) {
 			saveProps=props;props=null;
@@ -3575,7 +3562,8 @@ public class Cobol2Java extends DepthFirstVisitor {
 		} 
 		props=saveProps;
 		if(fileProps.isIndexedFile()) {
-			sourceLst.add(fileProps.getJavaName1()+".write();");
+			sourceLst.add(fileProps.getJavaName1()+".write("+
+					NameUtil.getJavaName(fileProps.getChildren().get(0),false)+");");
 		} else {
 			if(n.nodeOptional1.present()&&((AdvancingPhrase)n.nodeOptional1.node).nodeChoice.which==1) 
 				n.nodeOptional1.accept(this);
@@ -3674,7 +3662,9 @@ public class Cobol2Java extends DepthFirstVisitor {
 				expression.push(new ExpressionString(props).toString());
 				sourceLst.add(TranslationTable.getInstance().getAssignString(fileProps.getChildren().get(0),null,false));
 			}
-		} else 
+			// REWRITE writes the file's own record back.
+			assign=NameUtil.getJavaName(fileProps.getChildren().get(0),false);
+		} else
 		if(props==null) {
 			assign=formatLiteral(literal).toString();
 			assign=TranslationTable.getInstance().convertType(assign,CobolSymbol.GROUP, expressionType);
@@ -4464,7 +4454,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 				if (taskletList.get(key).length() > 0) {
 					String[] itemLst = taskletList.get(key).split(";");
 					for (String s : itemLst) {
-						sourceLst.add("model." + s + ".write(" + key.toLowerCase() + "Tasklet.execute(model." + s
+						// NameUtil already renders a group as model.getX().toString(); take the bare
+						// accessor so the prefix is added once.
+						String accessor = s.replaceFirst("^model\\.", "").replaceFirst("\\.toString\\(\\)$", "");
+						sourceLst.add("model." + accessor + ".write(" + key.toLowerCase() + "Tasklet.execute(model." + accessor
 								+ ").toString());");
 					}
 				}

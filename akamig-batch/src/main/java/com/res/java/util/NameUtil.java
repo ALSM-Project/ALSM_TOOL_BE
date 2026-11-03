@@ -106,7 +106,10 @@ public class NameUtil {
 				// A 01 group lives in the Model as an inner class that renders as its text
 				// (toString) and is filled with write(String). These used to come out as bare
 				// getX()/setX(...) on the Tasklet, which has neither.
-				if(!lastSet) {
+				if(props2.getLevelNumber()==88) {
+					// A condition-name is a getter on the Tasklet itself (see doOne88).
+					s=lastSet?"set"+getJavaName2(props2)+"(%0)":"get"+getJavaName2(props2)+"()";
+				} else if(!lastSet) {
 					s="model.get"+getJavaName2(props2)+"().toString()";
 				} else {
 					s="model.get"+getJavaName2(props2)+"().write(%0)";
