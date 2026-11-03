@@ -476,7 +476,14 @@ public class NameUtil {
 		
 		if(!lhs.getIsFormat())
 			return "%0";
-		
+
+		// The shared "<item>Fmt_" constants these used to name are no longer declared anywhere
+		// (X.yFmt_ pointed at a class that does not exist), so the format is built where it is used.
+		if(lhs.getJavaType()!=null&&((CobolSymbol)lhs.getJavaType()).pic!=null) {
+			String pic=((CobolSymbol)lhs.getJavaType()).pic.replace("\\","\\\\").replace("\"","\\\"");
+			return "new FieldFormat(\""+getJavaName1(lhs)+"\",\""+pic+"\").format(%0)";
+		}
+
 		SymbolProperties props=lhs;
 		String s = "";
 		Stack<SymbolProperties> st = new Stack<SymbolProperties>();

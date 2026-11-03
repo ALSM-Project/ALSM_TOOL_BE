@@ -1585,14 +1585,22 @@ public class SymbolUtil {
 	}
 
 	public String getFillerSetter(SymbolProperties props, String fillerVal) {
-		String level01Name=getLevel01Name(props);
+		String level01Name=getLevel01Accessor(props);
 		return getLocalFillerSetter(props,fillerVal).replace("super.", ((level01Name==null)?"":(level01Name+'.')));
 	}
 
 	public String getFillerGetter(SymbolProperties props) {
-		String level01Name=getLevel01Name(props);
+		String level01Name=getLevel01Accessor(props);
 		return getGetterString(props,-1,-1).
 			replace("super.", ((level01Name==null)?"":(level01Name+'.')));
+	}
+
+	/** The 01 group a FILLER sits in, as it is reached from the Tasklet (the group lives in the Model). */
+	private String getLevel01Accessor(SymbolProperties props) {
+		while((props=props.getParent())!=null&&!props.is01Group())
+			;
+		if(props==null) return null;
+		return "model.get"+props.getJavaName2()+"()";
 	}
 	
 	private String getLevel01Name(SymbolProperties props) {
@@ -2351,6 +2359,31 @@ public class SymbolUtil {
 		setgetLst.add("public void write(long value) {");
 		setgetLst.add("tab()");
 		setgetLst.add("write(String.valueOf(value));");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		// Single-byte access by offset, used for FILLER and INITIALIZE.
+		setgetLst.add("public void setChar(int offset, char value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("record.set(String.valueOf(value), record.getOffset() + offset, record.getOffset() + offset + 1);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		setgetLst.add("public char getChar(int offset) {");
+		setgetLst.add("tab()");
+		setgetLst.add("return record.charAt(offset);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		setgetLst.add("public void setByte(int offset, byte value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("setChar(offset, (char) (value & 0xff));");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		setgetLst.add("public byte getByte(int offset) {");
+		setgetLst.add("tab()");
+		setgetLst.add("return (byte) record.charAt(offset);");
 		setgetLst.add("backTab()");
 		setgetLst.add("}");
 		setgetLst.add("");
