@@ -2084,6 +2084,74 @@ public class SymbolUtil {
     	return s;
 	}
 
+	/** Same accessors as addTypedAccessors, for one element of an OCCURS table (index is 0-based). */
+	private void addTypedOccursAccessors(ArrayList<String> out, SymbolProperties child, String javaName2,
+			String type, int start, int length) {
+		String parent = child.getParent().getJavaName1();
+		String format = child.getPictureString() == null ? "X" : child.getPictureString();
+		String option = child.getDataUsage() == 20 ? ".withOption(\"COMP\")"
+				: child.getDataUsage() == 30 ? ".withOption(\"COMP-3\")" : "";
+		String cell = parent + ".subSequence(index * " + child.getParent().getLength() + " + " + start
+				+ ", index * " + child.getParent().getLength() + " + " + (start + length) + ").withFormat(\""
+				+ format + "\")" + option;
+		String set = "Record cell = " + cell + "; cell.set(value, cell.getOffset(), cell.getEnd());";
+		out.add("");
+		if (isNumericJavaType(type)) {
+			String result;
+			if (type.equals("int")) result = cell + ".toInt()";
+			else if (type.equals("long")) result = cell + ".toLong()";
+			else if (type.equals("BigDecimal")) result = cell + ".toBigDecimal()";
+			else if (type.equals("double")) result = cell + ".toBigDecimal().doubleValue()";
+			else if (type.equals("float")) result = cell + ".toBigDecimal().floatValue()";
+			else result = "(" + type + ") " + cell + ".toInt()";
+			out.add("public " + type + " get" + javaName2 + "(int index) {");
+			out.add("tab()");
+			out.add("return " + result + ";");
+			out.add("backTab()");
+			out.add("}");
+			for (String t : new String[] { "int", "long", "BigDecimal", "String" }) {
+				out.add("");
+				out.add("public void set" + javaName2 + "(int index, " + t + " value) {");
+				out.add("tab()");
+				out.add(set);
+				out.add("backTab()");
+				out.add("}");
+			}
+			out.add("");
+			out.add("public void set" + javaName2 + "(int index, double value) {");
+			out.add("tab()");
+			out.add("set" + javaName2 + "(index, BigDecimal.valueOf(value));");
+			out.add("backTab()");
+			out.add("}");
+		} else {
+			out.add("public String get" + javaName2 + "(int index) {");
+			out.add("tab()");
+			out.add("return " + cell + ".toString();");
+			out.add("backTab()");
+			out.add("}");
+			out.add("");
+			out.add("public void set" + javaName2 + "(int index, String value) {");
+			out.add("tab()");
+			out.add(set);
+			out.add("backTab()");
+			out.add("}");
+			for (String t : new String[] { "int", "long", "double" }) {
+				out.add("");
+				out.add("public void set" + javaName2 + "(int index, " + t + " value) {");
+				out.add("tab()");
+				out.add("set" + javaName2 + "(index, String.valueOf(value));");
+				out.add("backTab()");
+				out.add("}");
+			}
+			out.add("");
+			out.add("public void set" + javaName2 + "(int index, BigDecimal value) {");
+			out.add("tab()");
+			out.add("set" + javaName2 + "(index, value.toPlainString());");
+			out.add("backTab()");
+			out.add("}");
+		}
+	}
+
 	private static boolean isNumericJavaType(String type) {
 		return type.equals("byte")||type.equals("short")||type.equals("int")||type.equals("long")
 				||type.equals("float")||type.equals("double")||type.equals("BigDecimal");
@@ -2238,45 +2306,13 @@ public class SymbolUtil {
 			addTypedAccessors(arrayLst, javaName2, javaName1, getJavaType1(child));
 			return arrayLst;
 		} else {
-			if (getJavaType1(child).equals("int")) {
-				arrayLst.add("public int get" + javaName2 + "(int index) {");
-				arrayLst.add("tab()");
-				int idx1= child.getLength();
-				arrayLst.add("return Integer.parseInt(" + child.getParent().getJavaName1() + ".toString(index*"+
-						child.getParent().getLength() + "+" + idx + "," + idx1+ "));");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(int index, int value) {");
-				arrayLst.add("tab()");
-				arrayLst.add("int realIndex = "+child.getParent().getJavaName1() +".getOffset() + index * " +
-						child.getParent().getLength()+ ";");		
-				idx1+=idx;
-				arrayLst.add(child.getParent().getJavaName1() + ".set(value, realIndex + " +
-						idx +", realIndex +" + idx1 + ");");
-				idx = idx1;
-			} else {
-				arrayLst.add("public String get" + javaName2 + "(int index) {");
-				arrayLst.add("tab()");
-				int idx1 = child.getLength();
-				arrayLst.add("return " + child.getParent().getJavaName1() + ".toString(index*"
-						+ child.getParent().getLength() + "+" + idx + "," + idx1 + ");");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(int index, String value) {");
-				arrayLst.add("tab()");
-				arrayLst.add("int realIndex = " + child.getParent().getJavaName1() + ".getOffset() + index * "
-						+ child.getParent().getLength() + ";");
-				idx1 += idx;
-				arrayLst.add(child.getParent().getJavaName1() + ".set(value, realIndex + " + idx + ", realIndex +"
-						+ idx1 + ");");
-				idx = idx1;
-			}
+			// One element of an OCCURS table: addressed by index inside the table's Record.
+			int length = child.getLength();
+			int start = idx;
+			addTypedOccursAccessors(arrayLst, child, javaName2, getJavaType1(child), start, length);
+			idx = start + length;
+			return arrayLst;
 		}
-		arrayLst.add("backTab()");
-		arrayLst.add("}");
-		return arrayLst;
 	}
 	private ArrayList<String> printSetGetVar(SymbolProperties child, ArrayList<String> arrayLst) {
 		String javaName1=getName(child.getJavaName1());
