@@ -1774,7 +1774,10 @@ public class SymbolUtil {
 						//break;
 					}
 				}
-				if (!isCopy && tmpSymProp.getRedefinedBy() == null) {
+				if (!isCopy) {
+					// A 01 group that another item REDEFINES used to be left out of the Model altogether,
+					// so every reference to it failed to compile.
+
 					// Truong hop bien Level 1 la bien duoc gan kieu
 					if (tmpSymProp.getPictureString() != null) {
 						if (tmpSymProp.getLevelNumber() == 1) {
