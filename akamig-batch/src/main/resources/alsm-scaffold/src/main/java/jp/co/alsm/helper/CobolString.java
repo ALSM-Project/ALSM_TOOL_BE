@@ -262,7 +262,8 @@ public class CobolString {
 			if(matcher!=null&&matcher.find()) {
 				lastUnstringDelim=value.substring(matcher.start(),matcher.end());
 				lastUnstring=value.substring(prevMatchStart,matcher.start());
-				prevMatchStart=matcher.end()+1;
+				// The next field starts right after the delimiter (+1 dropped its first character).
+				prevMatchStart=matcher.end();
 			} else {
 				matcher=null;
 				lastUnstringDelim="";

@@ -102,6 +102,65 @@ public final class CobolSupport {
 		return value == null ? "" : value.toString();
 	}
 
+	/** STOP RUN: thrown where the statement is, caught by the Tasklet's execute(), which ends normally. */
+	public static final class StopRun extends RuntimeException {
+		private static final long serialVersionUID = 1L;
+
+		public StopRun() {
+			super("STOP RUN", null, false, false);
+		}
+	}
+
+	private static final ThreadLocal<jp.co.alsm.common.SqlSupport> SQL = new ThreadLocal<jp.co.alsm.common.SqlSupport>();
+
+	/** Embedded SQL of the current program (EXEC SQL ... END-EXEC), run over the application's DataSource. */
+	public static jp.co.alsm.common.SqlSupport __dao() {
+		jp.co.alsm.common.SqlSupport sql = SQL.get();
+		if (sql == null) {
+			sql = new jp.co.alsm.common.SqlSupport();
+			SQL.set(sql);
+		}
+		return sql;
+	}
+
+	/** Outcome of a STRING statement: the receiving item's text, the pointer after it, overflow. */
+	public static final class StringResult {
+		public final String text;
+		public final int pointer;
+		public final boolean overflow;
+
+		StringResult(String text, int pointer, boolean overflow) {
+			this.text = text;
+			this.pointer = pointer;
+			this.overflow = overflow;
+		}
+	}
+
+	/**
+	 * STRING source INTO target WITH POINTER pointer: places source into target (length characters)
+	 * from position pointer, leaving the rest of target as it is.
+	 */
+	public static StringResult __string(String target, int length, int pointer, String source) {
+		StringBuilder text = new StringBuilder(target == null ? "" : target);
+		while (text.length() < length)
+			text.append(' ');
+		if (text.length() > length)
+			text.setLength(length);
+		int position = pointer;
+		if (position < 1 || position > length)
+			return new StringResult(text.toString(), position, true);
+		boolean overflow = false;
+		for (int i = 0; i < source.length(); i++) {
+			if (position > length) {
+				overflow = true;
+				break;
+			}
+			text.setCharAt(position - 1, source.charAt(i));
+			position++;
+		}
+		return new StringResult(text.toString(), position, overflow);
+	}
+
 	public static String __normalizeLiteral(String literal) {
 		return literal;
 	}

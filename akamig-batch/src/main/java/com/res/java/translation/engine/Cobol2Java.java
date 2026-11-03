@@ -329,10 +329,11 @@ public class Cobol2Java extends DepthFirstVisitor {
 			}
 			props=null;
 		}
-        if(delayedStatements!=null)
-        	for(Node nd:delayedStatements) {
-        		nd.accept(execSql2Java);
-        	}
+		// DECLARE CURSOR in the data division is prepared where the cursor is OPENed (that is
+		// when DB2 binds its host variables); run here, its code went to a list nobody wrote out.
+		execSql2Java.setDeclaredCursors(delayedStatements);
+		// Cobol2Java is a singleton: the next program starts with no cursors of its own.
+		delayedStatements = null;
         if(n.procedureBody.paragraphs.nodeListOptional.present()) 
 			n.procedureBody.paragraphs.nodeListOptional.accept(this);
       //  sourceLst.add("doCobolGotoStart();");
@@ -411,6 +412,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 	}
 	@Override
 	public void visit(StopStatement n) {
+		// STOP RUN ends the run unit wherever it is, also inside a PERFORMed paragraph or a called
+		// program; execute() catches the signal and finishes the step normally. "if (true)" keeps
+		// javac from rejecting the statements COBOL allows after it.
+		sourceLst.add("if (true) throw new CobolSupport.StopRun();");
 		//super.visit(n);
 		/* Detete 20210828 S
 		sourceLst.add("System.exit(super.__getReturnCode());");
@@ -2982,9 +2987,41 @@ public class Cobol2Java extends DepthFirstVisitor {
 			}
 		}
 		if(line.length()>0) {
-			expression.push(line.toString());
-			expressionType=Constants.STRING;
-			sourceLst.add(TranslationTable.getInstance().getAssignString(saveProps, null,false));
+			// STRING ... INTO x [WITH POINTER p] [ON OVERFLOW ...] [NOT ON OVERFLOW ...]: the text is
+			// placed into x from position p (1 when there is no POINTER), the rest of x is left as it
+			// was, p ends one past the last character placed, and OVERFLOW is raised when the text
+			// does not fit or p starts outside x. Assigning the concatenation, as before, cleared x and
+			// ignored the pointer.
+			SymbolProperties pointerProps=null;
+			if(n.nodeOptional.present()) {
+				props=null;
+				((NodeSequence)n.nodeOptional.node).elementAt(2).accept(this);
+				pointerProps=props;
+			}
+			String pointer=pointerProps==null?"1":"CallSupport.asInt("+NameUtil.getJavaName(pointerProps,false)+")";
+			sourceLst.add("{");
+			sourceLst.add("tab()");
+			sourceLst.add("CobolSupport.StringResult stringResult__ = CobolSupport.__string(String.valueOf("
+					+NameUtil.getJavaName(saveProps,false)+"), "+saveProps.getLength()+", "+pointer+", "+line+");");
+			sourceLst.add(NameUtil.getJavaName(saveProps,true).replace("%0","stringResult__.text")+";");
+			if(pointerProps!=null)
+				sourceLst.add(NameUtil.getJavaName(pointerProps,true).replace("%0","stringResult__.pointer")+";");
+			if(n.nodeOptional1.present()) {
+				sourceLst.add("if (stringResult__.overflow) {");
+				sourceLst.add("tab()");
+				((NodeSequence)n.nodeOptional1.node).elementAt(2).accept(this);
+				sourceLst.add("backTab()");
+				sourceLst.add("}");
+			}
+			if(n.nodeOptional2.present()) {
+				sourceLst.add("if (!stringResult__.overflow) {");
+				sourceLst.add("tab()");
+				((NodeSequence)n.nodeOptional2.node).elementAt(3).accept(this);
+				sourceLst.add("backTab()");
+				sourceLst.add("}");
+			}
+			sourceLst.add("backTab()");
+			sourceLst.add("}");
 		}
 	}
 
@@ -4541,6 +4578,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 		classLst.add("backTab()");
 		classLst.add("} catch (Exception e) {");
 		classLst.add("tab()");
+		classLst.add("if (e instanceof CobolSupport.StopRun) return RepeatStatus.FINISHED;");
 		// The failure reaches Spring Batch, so the job ends FAILED instead of reporting COMPLETED.
 		classLst.add("this.logger.error(String.valueOf(e));");
 		classLst.add("throw e;");
