@@ -150,6 +150,9 @@ public class NameUtil {
 				if (props.getLevelNumber()==1)
 				{
 					s="model.";
+					// The reference-modification target repeats the accessor chain, so it needs
+					// the same prefix (it came out as a bare getX()).
+					if(doRefModSet) refModSet="model.";
 				}
 				frstrun=false;
 			}

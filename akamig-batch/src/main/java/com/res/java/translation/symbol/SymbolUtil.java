@@ -1865,7 +1865,7 @@ public class SymbolUtil {
 				if (child.getRedefines() == null) {
 					// continue;
 					// }
-					if (!child.getJavaName1().toLowerCase().contains("filler")) {
+					if (!child.getJavaName1().toLowerCase().startsWith("filler")) {
 						// Write for var
 						recordLst = printVar(child, recordLst);
 						// Write for constructor
@@ -2008,7 +2008,7 @@ public class SymbolUtil {
 			if (child.getRedefines() == null) {
 				// continue;
 				// }
-				if (!child.getJavaName1().toLowerCase().contains("filler")) {
+				if (!child.getJavaName1().toLowerCase().startsWith("filler")) {
 					// Write for Var
 					recordLst = printVar(child, recordLst);
 					// Write for constructor
@@ -2359,6 +2359,19 @@ public class SymbolUtil {
 		setgetLst.add("public void write(long value) {");
 		setgetLst.add("tab()");
 		setgetLst.add("write(String.valueOf(value));");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		// Fills part of the group with a value repeated to the length (INITIALIZE ... TO SPACES).
+		setgetLst.add("public void valueOf(int offset, int length, String value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("StringBuilder filled = new StringBuilder();");
+		setgetLst.add("while (filled.length() < length) {");
+		setgetLst.add("tab()");
+		setgetLst.add("filled.append(value.isEmpty() ? \" \" : value);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("record.set(filled.substring(0, length), record.getOffset() + offset, record.getOffset() + offset + length);");
 		setgetLst.add("backTab()");
 		setgetLst.add("}");
 		setgetLst.add("");

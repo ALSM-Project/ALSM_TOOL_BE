@@ -4375,6 +4375,21 @@ public class Cobol2Java extends DepthFirstVisitor {
 		classLst.add("");
 		classLst.addAll(level88Getters);
 		level88Getters.clear();
+		// The RETURN-CODE special register is not a declared data item.
+		classLst.add("private int returnCode__;");
+		classLst.add("");
+		classLst.add("public int getReturnCode__() {");
+		classLst.add("tab()");
+		classLst.add("return returnCode__;");
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("");
+		classLst.add("public void setReturnCode__(int value) {");
+		classLst.add("tab()");
+		classLst.add("returnCode__ = value;");
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("");
 		classLst.add("@Override");
 		classLst.add(
 				"public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {");
@@ -4436,7 +4451,11 @@ public class Cobol2Java extends DepthFirstVisitor {
 				// NameUtil.convertCobolNameToJava(key.toUpperCase(),true) +"Tasklet;");
 						key + "Tasklet;");
 				// System.out.println(key + " : " + taskletList.get(key));
-				sourceLst.add("private void call" + key + "() throws Exception {");
+				// Declared without "throws": it is called from ordinary paragraphs, which are not
+				// declared to throw either, so a failure inside is rethrown unchecked.
+				sourceLst.add("private void call" + key + "() {");
+				sourceLst.add("tab()");
+				sourceLst.add("try {");
 				sourceLst.add("tab()");
 				sourceLst.add(key + "Tasklet " + key.toLowerCase() + "Tasklet = new " + key + "Tasklet();");
 				if (taskletList.get(key).length() > 0) {
@@ -4454,6 +4473,12 @@ public class Cobol2Java extends DepthFirstVisitor {
 					}
 					sourceLst.add(key.toLowerCase() + "Tasklet.execute(" + arguments + ");");
 				}
+				sourceLst.add("backTab()");
+				sourceLst.add("} catch (Exception e) {");
+				sourceLst.add("tab()");
+				sourceLst.add("throw new RuntimeException(e);");
+				sourceLst.add("backTab()");
+				sourceLst.add("}");
 				sourceLst.add("backTab()");
 				sourceLst.add("}");
 			}
