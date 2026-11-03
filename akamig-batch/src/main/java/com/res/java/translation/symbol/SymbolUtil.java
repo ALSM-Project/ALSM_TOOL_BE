@@ -76,13 +76,24 @@ public class SymbolUtil {
 				else ClassFile.println(item);
 			}
 
-			for(String item : varLst){			
+			// A data item reached through more than one path (a PERFORM VARYING index, a level-88
+			// parent, a copybook pulled in twice) is queued once per path. Java rejects a second
+			// declaration of the same field, and that one error also stops Lombok from generating
+			// any getter or setter, so every field is written once.
+			java.util.Set<String> declaredFields = new java.util.HashSet<String>();
+			java.util.regex.Pattern fieldDeclaration =
+					java.util.regex.Pattern.compile("^private\\s+.+?\\s+(\\w+)\\s*(?:=.*)?;\\s*$");
+			for(String item : varLst){
 				if (item.equals("tab()")) ClassFile.tab();
 				else if (item.equals("backTab()")) ClassFile.backTab();
-				else ClassFile.println(item);
+				else {
+					java.util.regex.Matcher m = fieldDeclaration.matcher(item);
+					if (m.matches() && !declaredFields.add(m.group(1))) continue;
+					ClassFile.println(item);
+				}
 			}
-	
-			for(String item : constructorsLst){	
+
+			for(String item : constructorsLst){
 				if (item.equals("tab()")) ClassFile.tab();
 				else if (item.equals("backTab()")) ClassFile.backTab();
 				else ClassFile.println(item);
@@ -106,9 +117,13 @@ public class SymbolUtil {
 		classLst = new ArrayList<String>();
 		varLst = new ArrayList<String>();
 		constructorsLst = new ArrayList<String>();
+		// Left out, these two carried one program's field initialisers and 88-level getters
+		// into the next program of the same run (Model01 received CBACT01C's applResult).
+		constructorsLst1 = new ArrayList<String>();
+		Cobol2Java.level88Getters.clear();
 		setgetLst = new ArrayList<String>();
 		modelNameLst = new ArrayList<String>();
-		
+
 		bFlag = false;
 		isFirstRun = true;
 		emittedModelAttrs = new java.util.HashSet<String>();	
@@ -1873,7 +1888,10 @@ public class SymbolUtil {
 				}
 				idx1 = idx2;
 			}
-			recordLst.add("private Record record = new Record(new byte[Length]);");
+			// The buffer holds the whole group: its declared length, or the end of its last child
+			// when OCCURS items push the layout past that. "Length" was never declared anywhere.
+			int recordLength = Math.max(Math.max(props.getAdjustedLength(), props.getLength()), idx2);
+			recordLst.add("private Record record = new Record(new byte[" + recordLength + "]);");
 			/* 20280831 Add S */
 			recordLst.add("public byte[] getDatas() {");
 			recordLst.add("tab()");

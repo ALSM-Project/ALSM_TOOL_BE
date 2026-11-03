@@ -333,6 +333,9 @@ public class Main {
 		 // QuyTV 
 		 // Print tasklet declare
 		 Cobol2Java.printTaskletDeclare(headerLst,classLst, fileLst);
+		 // The list is static and only refilled when a program declares files, so a program
+		 // without any (Model01) used to inherit the previous program's files.
+		 fileLst = null;
 			ClassFile.endProgramScope();
 		 //QuyTV Print job template
 		 ClassFile.doProgramScopeJobTemplate();

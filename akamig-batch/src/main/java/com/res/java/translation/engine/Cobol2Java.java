@@ -4373,11 +4373,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 		// For class
 		if (fileLst != null) {
 			for (SymbolProperties child : fileLst) {
-				if (child.isIndexedFile()) {
-					// System.out.println("Process for Index File");
-				} else if (child.isLineSequentialFile()) {
-					// System.out.println("Process for Sequential File");
-				} else {
+				// Indexed and line sequential files used to be skipped here, yet the assign-name
+				// loop below and every READ/WRITE still referred to them, so the Tasklet did not
+				// compile. Every file gets its FileRecord.
+				{
 					String strLen;
 					/*
 					 * if (child.getChildren() != null) { strLen =
