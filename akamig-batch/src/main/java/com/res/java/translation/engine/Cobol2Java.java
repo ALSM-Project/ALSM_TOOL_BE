@@ -4499,8 +4499,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 				String assignName = child.getOtherName().replace("\"", "");
 				if (assignName.startsWith("S-"))
 					assignName = assignName.substring(2);
-				classLst.add(child.getJavaName1() + ".withAssignName((String) jobParameters.get(\""
-						+ assignName + "\"));");
+				// The DD name lets the file find its path in the environment too, and name itself
+				// in the error when no path was given.
+				classLst.add(child.getJavaName1() + ".withDdName(\"" + assignName + "\").withAssignName("
+						+ "jobParameters == null ? null : (String) jobParameters.get(\"" + assignName + "\"));");
 			}
 			classLst.add("");
 		}
@@ -4539,8 +4541,9 @@ public class Cobol2Java extends DepthFirstVisitor {
 		classLst.add("backTab()");
 		classLst.add("} catch (Exception e) {");
 		classLst.add("tab()");
-		classLst.add("this.logger.error(e.getMessage());");
-		classLst.add("return RepeatStatus.FINISHED;");
+		// The failure reaches Spring Batch, so the job ends FAILED instead of reporting COMPLETED.
+		classLst.add("this.logger.error(String.valueOf(e));");
+		classLst.add("throw e;");
 		classLst.add("backTab()");
 		classLst.add("}");
 		classLst.add("");
