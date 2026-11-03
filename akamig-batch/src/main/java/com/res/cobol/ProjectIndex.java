@@ -269,6 +269,18 @@ public class ProjectIndex {
 		return found;
 	}
 
+	/** True when the project itself has a copybook of that name. */
+	public boolean hasCopybook(String name) {
+		return copybooks.containsKey(name.toLowerCase(Locale.ROOT));
+	}
+
+	/** Registers a stand-in for a system copybook (DFHAID, SQLCA ...) the project does not ship. */
+	public void addSystemCopybook(String name, Path file) {
+		String key = name.toLowerCase(Locale.ROOT);
+		if (!copybooks.containsKey(key))
+			copybooks.put(key, file);
+	}
+
 	/** Programs called by name somewhere in the project that are not part of it. */
 	public Set<String> unresolvedCalls() {
 		Set<String> missing = new LinkedHashSet<String>();
