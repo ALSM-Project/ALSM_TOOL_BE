@@ -602,7 +602,14 @@ public class Cobol2Java extends DepthFirstVisitor {
 													int idx=Integer.parseInt(litC.literal.substring(12, litC.literal.indexOf("__",12)));
 													//Update 20210625 S
 													//litC.literal=litC.literal.replace(0,litC.literal.indexOf("__",12)+2,SymbolConstants.getFunction(idx)).insert(0,"__function().");
-													litC.literal =litC.literal.replace(0, litC.literal.length(), SymbolConstants.getFunction(idx));
+													// "__function__26__Int(a,b)" becomes CobolFunction.mod(a,b): the
+													// name comes from the table, the argument list is kept. Replacing the
+													// whole literal left only the bare name (FUNCTION MOD(A,B) came out as
+													// "mod").
+													int argsAt=litC.literal.indexOf("(");
+													String arguments=argsAt<0?"()":litC.literal.substring(argsAt);
+													litC.literal =litC.literal.replace(0, litC.literal.length(),
+															"CobolFunction."+SymbolConstants.getFunction(idx)+arguments);
 													//Update 20210625 E
 													expressionType=Math.max(litC.type,expressionType);
 													litC.type=expressionType;
