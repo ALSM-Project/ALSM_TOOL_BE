@@ -56,6 +56,8 @@ public class Main {
 	private String projectRoot;
 	private String basePackage = "jp.co.alsm.batch";
 	private boolean scaffold;
+	/** With -scaffold: compile the result with Maven and stub the programs whose Java does not compile. */
+	private boolean verifyBuild = true;
 
 	public static java.nio.charset.Charset getSourceCharset() {
 		return sourceCharset;
@@ -129,7 +131,7 @@ public class Main {
 			}
 			if (instance.projectRoot != null) {
 				code = new ProjectConverter(instance, instance.projectRoot, RESConfig.getInstance().getOutputDir(),
-						instance.basePackage, instance.scaffold).run();
+						instance.basePackage, instance.scaffold, instance.verifyBuild).run();
 			} else if (!RESConfig.getInstance().isDoListDir()) {
 				instance.execute(args[i]);
 			} else {
@@ -637,6 +639,8 @@ public class Main {
 					includeDirs.add(new File(dir));
 			} else if (args[i].substring(1).equalsIgnoreCase("scaffold")) {
 				scaffold = true;
+			} else if (args[i].substring(1).equalsIgnoreCase("noverify")) {
+				verifyBuild = false;
 			} else
 				displayProgramUsageAndExit();
 		}
@@ -682,7 +686,12 @@ public class Main {
 	}
 
 	private static void displayProgramUsageAndExit() {
-		System.out.println("\nUsage: java -jar AkaMig.jar [options] <Source-File-Name>");
+		System.out.println("\nUsage: java -jar akaBatch-1.0.jar -project <cobol-folder> -odir <output-folder>"
+				+ " [-basePackage jp.co.alsm.batch] [-encoding MS932] [-I dir;dir] [-scaffold [-noverify]] [-fixed|-free]");
+		System.out.println("\t-project folder\t: converts every program of the folder (copybooks found anywhere in it).");
+		System.out.println("\t-scaffold \t: writes a complete Maven project, then compiles it (needs mvn on the PATH)");
+		System.out.println("\t\t\t  and replaces a program whose Java does not compile with a stub; -noverify skips that.");
+		System.out.println("\nOR\n\nUsage: java -jar AkaMig.jar [options] <Source-File-Name>");
 		System.out.println("\nOptions for COBOL translation may one or more of the following.\n");
 		System.out.println("\t-odir output-direcory: specifies directory where target packages reside.");
 		System.out.println("\t-dp package-name: spcifies the package for data classes.");

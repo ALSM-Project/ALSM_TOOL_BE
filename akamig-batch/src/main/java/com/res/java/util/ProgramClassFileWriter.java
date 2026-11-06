@@ -173,6 +173,7 @@ public class ProgramClassFileWriter extends ClassFileWriter {
 			headerLst.add("import jp.co.alsm.config.CallSupport;");
 			headerLst.add("import jp.co.alsm.helper.CobolFunction;");
 			headerLst.add("import jp.co.alsm.helper.CobolString;");
+			headerLst.add("import jp.co.alsm.helper.CobolSupport;");
 			headerLst.add("import jp.co.alsm.helper.Compare;");
 			headerLst.add("import jp.co.alsm.helper.FieldFormat;");
 			headerLst.add("import jp.co.alsm.helper._Math;");

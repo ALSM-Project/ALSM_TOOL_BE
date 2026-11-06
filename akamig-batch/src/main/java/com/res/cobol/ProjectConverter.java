@@ -38,14 +38,17 @@ public class ProjectConverter {
 	private final Path outputDir;
 	private final String basePackage;
 	private final boolean scaffold;
+	private final boolean verifyBuild;
 
-	ProjectConverter(Main main, String projectRoot, String outputDir, String basePackage, boolean scaffold) {
+	ProjectConverter(Main main, String projectRoot, String outputDir, String basePackage, boolean scaffold,
+			boolean verifyBuild) {
 		this.main = main;
 		this.projectRoot = Paths.get(projectRoot).toAbsolutePath().normalize();
 		this.outputDir = outputDir == null || outputDir.trim().isEmpty() ? null
 				: Paths.get(outputDir.trim()).toAbsolutePath().normalize();
 		this.basePackage = basePackage;
 		this.scaffold = scaffold;
+		this.verifyBuild = verifyBuild;
 	}
 
 	/** Returns 0 when the run completed (even if some programs failed), 1 when it could not start. */
@@ -152,6 +155,11 @@ public class ProjectConverter {
 		for (Map.Entry<String, ProjectIndex.ProgramInfo> entry : index.getPrograms().entrySet())
 			outcomes.add(translate(entry.getValue(), javaRoot, programPackage));
 
+		if (scaffold) {
+			writeScaffold(outcomes);
+			if (verifyBuild && verifyBuild(index, outcomes, javaRoot, programPackage))
+				writeScaffold(outcomes);// the default job may have become a stub
+		}
 		int ok = 0;
 		for (Outcome outcome : outcomes)
 			if (outcome.success)
@@ -160,8 +168,91 @@ public class ProjectConverter {
 		System.out.println("Converted " + ok + " of " + outcomes.size() + " program(s). Report: "
 				+ outputDir.resolve("conversion_report.md"));
 		if (scaffold)
-			System.out.println("Note: -scaffold is not available in this build; the Java sources were written to " + javaRoot);
+			System.out.println("Maven project written to " + outputDir + " - build it with: mvn clean package -DskipTests");
 		return 0;
+	}
+
+	private void writeScaffold(List<Outcome> outcomes) throws IOException {
+		List<String> jobs = new ArrayList<String>();
+		String defaultJob = null;
+		for (Outcome outcome : outcomes) {
+			jobs.add(className(outcome.programId));
+			if (defaultJob == null && outcome.success && !outcome.subprogram)
+				defaultJob = className(outcome.programId);
+		}
+		String projectName = projectRoot.getFileName() == null ? "cobol-project" : projectRoot.getFileName().toString();
+		ProjectScaffold.write(outputDir, projectName, basePackage, jobs, defaultJob);
+	}
+
+	/**
+	 * Compiles the written Maven project and replaces each program whose generated Java does not
+	 * compile with a stub, until the project compiles (a few rounds at most: one broken program
+	 * can hide errors of another). Returns true when a program was stubbed. Without Maven on the
+	 * PATH the check is skipped with a note.
+	 */
+	private boolean verifyBuild(ProjectIndex index, List<Outcome> outcomes, Path javaRoot, String programPackage) {
+		boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+		String packagePath = programPackage.replace('.', '/') + "/";
+		java.util.regex.Pattern error = java.util.regex.Pattern.compile(
+				"\\[ERROR\\].*?" + java.util.regex.Pattern.quote(packagePath) + "([a-z0-9_]+)/[\\w$]+\\.java:\\[\\d+,\\d+\\]\\s*(.*)");
+		boolean changed = false;
+		for (int round = 1; round <= 5; round++) {
+			System.out.println("Build check " + round + ": mvn compile");
+			List<String> output = new ArrayList<String>();
+			int code;
+			try {
+				ProcessBuilder pb = new ProcessBuilder(windows ? "mvn.cmd" : "mvn", "-B", "-q", "clean", "compile")
+						.directory(outputDir.toFile()).redirectErrorStream(true);
+				Process process = pb.start();
+				try (java.io.BufferedReader reader = new java.io.BufferedReader(
+						new java.io.InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+					String line;
+					while ((line = reader.readLine()) != null)
+						output.add(line);
+				}
+				code = process.waitFor();
+			} catch (IOException e) {
+				System.out.println("  skipped: Maven (mvn) was not found on the PATH");
+				return changed;
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return changed;
+			}
+			if (code == 0) {
+				System.out.println("  BUILD SUCCESS");
+				return changed;
+			}
+			Map<String, String> broken = new java.util.LinkedHashMap<String, String>();
+			for (String line : output) {
+				java.util.regex.Matcher m = error.matcher(line.replace('\\', '/'));
+				if (m.find() && !broken.containsKey(m.group(1)))
+					broken.put(m.group(1), m.group(2).trim());
+			}
+			if (broken.isEmpty()) {
+				System.out.println("  the build failed outside the converted programs:");
+				for (int i = 0; i < output.size() && i < 30; i++)
+					System.out.println("  " + output.get(i));
+				return changed;
+			}
+			for (Outcome outcome : outcomes) {
+				String folder = folderName(outcome.programId);
+				if (!broken.containsKey(folder))
+					continue;
+				ProjectIndex.ProgramInfo info = index.getPrograms().get(outcome.programId);
+				if (info == null)
+					for (ProjectIndex.ProgramInfo candidate : index.getPrograms().values())
+						if (candidate.programId.equals(outcome.programId))
+							info = candidate;
+				if (info == null)
+					continue;
+				Path programDir = javaRoot.resolve(programPackage.replace('.', File.separatorChar)).resolve(folder);
+				fail(outcome, programDir, programPackage, info,
+						"the generated Java does not compile: " + broken.get(folder), -1);
+				changed = true;
+			}
+		}
+		System.out.println("  the build still fails after 5 rounds; see mvn compile in " + outputDir);
+		return changed;
 	}
 
 	private static String folderName(String programId) {
@@ -394,15 +485,19 @@ public class ProjectConverter {
 	}
 
 	/**
-	 * A job and tasklet for a program that could not be translated. The job exists under the program's
-	 * name, so callers and job lists still see it, and running it fails with the reason.
+	 * A job, tasklet and model for a program that could not be translated. The job exists under the
+	 * program's name, so callers and job lists still see it; running or CALLing it logs a warning
+	 * with the reason and does nothing, so the rest of the project builds and runs.
 	 */
 	private void writeStub(Path programDir, String programPackage, ProjectIndex.ProgramInfo info, Outcome outcome)
 			throws IOException {
 		String cls = className(info.programId);
 		String pkg = programPackage + "." + folderName(info.programId);
 		String reason = javaString(outcome.message) + (outcome.line > 0 ? " (line " + outcome.line + ")" : "");
+		String warning = "\"COBOL program " + info.programId + " was not converted, nothing was done: " + reason + "\"";
 		String tasklet = "package " + pkg + ";\n\n"
+				+ "import org.slf4j.Logger;\n"
+				+ "import org.slf4j.LoggerFactory;\n"
 				+ "import org.springframework.batch.core.StepContribution;\n"
 				+ "import org.springframework.batch.core.scope.context.ChunkContext;\n"
 				+ "import org.springframework.batch.core.step.tasklet.Tasklet;\n"
@@ -412,16 +507,33 @@ public class ProjectConverter {
 				+ " * Source: " + outcome.file + "\n * Reason: " + reason.replace("*/", "* /") + "\n */\n"
 				+ "@Component\n"
 				+ "public class " + cls + "Tasklet implements Tasklet {\n\n"
+				+ "  private static final Logger LOG = LoggerFactory.getLogger(" + cls + "Tasklet.class);\n\n"
 				+ "  @Override\n"
 				+ "  public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {\n"
-				+ "    throw new UnsupportedOperationException(\"COBOL program " + info.programId
-				+ " was not converted: " + reason + "\");\n"
+				+ "    LOG.warn(" + warning + ");\n"
+				+ "    return RepeatStatus.FINISHED;\n"
 				+ "  }\n\n"
-				+ "  public Object execute(Object... arguments) {\n"
-				+ "    throw new UnsupportedOperationException(\"COBOL program " + info.programId
-				+ " was not converted: " + reason + "\");\n"
+				+ "  /** CALL entry point (see CallSupport): the arguments are left as they are. */\n"
+				+ "  public void call__(Object[] arguments) {\n"
+				+ "    LOG.warn(" + warning + ");\n"
 				+ "  }\n"
 				+ "}\n";
+		String model = "package " + pkg + ";\n\n"
+				+ "import java.util.HashMap;\n"
+				+ "import java.util.Map;\n\n"
+				+ "import org.springframework.stereotype.Component;\n\n"
+				+ "/** Data of the unconverted program " + info.programId + ": any item by name, unset ones read as null. */\n"
+				+ "@Component\n"
+				+ "public class " + cls + "Model {\n\n"
+				+ "  private final Map<String, Object> items = new HashMap<String, Object>();\n\n"
+				+ "  public Object get(String name) {\n"
+				+ "    return items.get(name);\n"
+				+ "  }\n\n"
+				+ "  public void set(String name, Object value) {\n"
+				+ "    items.put(name, value);\n"
+				+ "  }\n"
+				+ "}\n";
+		Files.write(programDir.resolve(cls + "Model.java"), model.getBytes(StandardCharsets.UTF_8));
 		String job = "package " + pkg + ";\n\n"
 				+ "import org.springframework.batch.core.Job;\n"
 				+ "import org.springframework.batch.core.Step;\n"

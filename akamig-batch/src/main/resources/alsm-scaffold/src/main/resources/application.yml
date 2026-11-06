@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: alsmplaceholdername
+  batch:
+    jdbc:
+      initialize-schema: always
+      # The runtime brings JPA; JPA cannot take the stricter lock Spring Batch asks for by default.
+      isolation-level-for-create: default
+    job:
+      # BatchApplication decides which job runs, so Spring Boot must not start them all.
+      enabled: false
+  datasource:
+    url: jdbc:h2:mem:batchdb;DB_CLOSE_DELAY=-1
+    username: sa
+    password:

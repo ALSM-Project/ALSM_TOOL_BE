@@ -85,7 +85,7 @@ public class CalculateSymbolLength implements Visitor {
 		if(props.isOccurs())
 			subscriptParents.pop();
 		if(props.getType()==SymbolConstants.PROGRAM||props.is01Group()) {
-			if(props.is01Group()&&props.getDataName().equalsIgnoreCase("SQLCA")) {
+			if(false&&props.is01Group()&&props.getDataName().equalsIgnoreCase("SQLCA")) {
 					props.setLength(100);//Hack
 			}
 			offset.pop();
