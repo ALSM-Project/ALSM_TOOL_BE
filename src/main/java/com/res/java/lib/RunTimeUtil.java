@@ -39,8 +39,7 @@ public class RunTimeUtil {
 	public void reportError(String s,boolean exit) {
 		System.out.println(s);
 		if(exit) {
-			System.out.println("Done.");
-			System.exit(1);
+			throw new com.res.common.CobolTranslationException(s);
 		}
 	}
 	

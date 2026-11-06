@@ -52,6 +52,23 @@ public class ClassFile {
 		files.push(current);
 	}
 
+	/**
+	 * Closes every class file still open after a translation failed part-way, without writing the
+	 * closing braces. Left open, the stream flushed its half-written class over whatever was written
+	 * to the same path afterwards (the failure stub).
+	 */
+	public static void abandonAll() {
+		while (!files.isEmpty()) {
+			ClassFileWriter writer = files.pop();
+			if (writer != null)
+				writer.close();
+		}
+		if (current != null)
+			current.close();
+		current = null;
+		parent = null;
+	}
+
 	public static void endProgramScope() {
 		if(current==null)
 			return;

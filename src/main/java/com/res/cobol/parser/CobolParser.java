@@ -27897,6 +27897,7 @@ public class CobolParser implements CobolParserConstants {
    RESConfig.getInstance().setInError(true);
    Token t = token_source.getNextToken();
    System.out.println(e.toString());
+   com.res.common.Diagnostics.add(e.toString(), e.currentToken != null && e.currentToken.next != null ? e.currentToken.next.beginLine : -1);
    int previousLine = -1,previousColumn = -1;
    do
    {

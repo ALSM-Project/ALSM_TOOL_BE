@@ -225,7 +225,7 @@ public class Preprocessor {
 		output.println("# " + 1 + " \"" + copyClass.copyName + "\"  ");
 
 		try {
-			input = new BufferedReader(new FileReader(copyClass.copy_file));
+			input = new BufferedReader(new InputStreamReader(new FileInputStream(copyClass.copy_file), Main.getSourceCharset()));
 			preprocessMainline();
 		} catch (Exception ex) {
 			System.err.println("IO Exception while processing COPY line " + line_number + " " + line);
@@ -376,7 +376,7 @@ public class Preprocessor {
 		output.println("# " + 1 + " \"" + copyClass.copyName + "\"  ");
 
 		try {
-			input = new BufferedReader(new FileReader(copyClass.copy_file));
+			input = new BufferedReader(new InputStreamReader(new FileInputStream(copyClass.copy_file), Main.getSourceCharset()));
 			preprocessMainline();
 		} catch (Exception ex) {
 			System.err.println("IO Exception while processing COPY line " + line_number + " " + line);
@@ -417,11 +417,38 @@ public class Preprocessor {
 		}
 	}
 
+	/**
+	 * Where a copybook is looked for: the project-wide registry built in pass 1, so a COPY
+	 * resolves wherever the copybook lives, then the folders given with -I, then (by the caller)
+	 * the folder of the program itself.
+	 */
+	private File findCopyFile(String copy_name) {
+		ProjectIndex index = Main.getProjectIndex();
+		if (index != null) {
+			java.nio.file.Path found = index.findCopybook(copy_name);
+			if (found != null)
+				return found.toFile();
+		}
+		for (File dir : Main.getIncludeDirs()) {
+			String[] suffixes = { "", ".cpy", ".CPY", ".cbl", ".CBL", ".cob", ".COB", ".copy", ".inc" };
+			for (String suffix : suffixes) {
+				File candidate = new File(dir, copy_name + suffix);
+				if (candidate.isFile())
+					return candidate;
+			}
+		}
+		return null;
+	}
+
 	private CopyClass checkCopy(String copy_name, boolean fromCopy) throws IOException {
 
 		copy_name = RunTimeUtil.getInstance().stripQuotes((String) copy_name);
 
-		File copy_file = new File(source_path, copy_name);
+		File copy_file = findCopyFile(copy_name);
+
+		if (copy_file == null) {
+			copy_file = new File(source_path, copy_name);
+		}
 
 		if (!copy_file.exists()) {
 			String copy_name2 = copy_name + ".CPY";
@@ -538,6 +565,9 @@ public class Preprocessor {
 	 */
 	class CoupleValue {
 		int noOfKeyTokens;
+		/** The match must start / end at a word boundary (false for LEADING, TRAILING and :TAG:). */
+		boolean wholeStart = true;
+		boolean wholeEnd = true;
 		Pattern key;
 		String value;
 	}
@@ -564,6 +594,15 @@ public class Preprocessor {
 				return;
 			}
 			StringBuffer subst = new StringBuffer();
+
+			// COBOL-85 REPLACING LEADING ==x== BY ==y== / TRAILING: x is matched at the start / end
+			// of a word instead of as a whole word.
+			boolean leading = false, trailing = false;
+			if (tok.equalsIgnoreCase("LEADING") || tok.equalsIgnoreCase("TRAILING")) {
+				leading = tok.equalsIgnoreCase("LEADING");
+				trailing = !leading;
+				tok = skipSpaces();
+			}
 
 			if (tok.equals("==")) {
 				while ((tok = getNextToken(true, true)) != null && !tok.equals("=="))
@@ -641,6 +680,10 @@ public class Preprocessor {
 			keyValue.key = pattern;
 			keyValue.value = value;
 			keyValue.noOfKeyTokens = sArr_Length;
+			// A tag such as :TAG: (IBM) is replaced inside a word too (:TAG:-REC becomes WS-REC).
+			boolean tag = key.trim().length() > 2 && key.trim().startsWith(":") && key.trim().endsWith(":");
+			keyValue.wholeStart = !trailing && !tag;
+			keyValue.wholeEnd = !leading && !tag;
 			replace.add(keyValue);
 
 			for (int i = 0; i < saveLine.size(); ++i) {
@@ -850,10 +893,11 @@ public class Preprocessor {
 	private final void outputAsComment(String line) {
 		if (source_format == Preprocessor.FORMAT_FIXED) {
 			output.print("      *>");
-			output.println(line.substring(7));
+			// Short lines occur here (a COPY whose copybook is missing): nothing past column 7 to keep.
+			output.println(line.length() > 7 ? line.substring(7) : "");
 		} else {
 			output.print("*> ");
-			output.println(line.substring(1));
+			output.println(line.length() > 1 ? line.substring(1) : "");
 		}
 	}
 
@@ -866,10 +910,11 @@ public class Preprocessor {
 	private final void outputComment(String line) {
 		if (source_format == Preprocessor.FORMAT_FIXED) {
 			output.print("      *>");
-			output.println(line.substring(7));
+			// Short lines occur here (a COPY whose copybook is missing): nothing past column 7 to keep.
+			output.println(line.length() > 7 ? line.substring(7) : "");
 		} else {
 			output.print("*> ");
-			output.println(line.substring(1));
+			output.println(line.length() > 1 ? line.substring(1) : "");
 		}
 	}
 
@@ -1043,8 +1088,8 @@ public class Preprocessor {
 			matcher = keyValue.key.matcher(replaceWorkspace.toString());
 			StringBuffer matchedPartOfLine = new StringBuffer();
 			while (matcher.find()) {
-				if ((matcher.start() <= 0 || WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.start() - 1)) >= 0)
-						&& (matcher.end() >= replaceWorkspace.length()
+				if ((!keyValue.wholeStart || matcher.start() <= 0 || WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.start() - 1)) >= 0)
+						&& (!keyValue.wholeEnd || matcher.end() >= replaceWorkspace.length()
 								|| WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.end())) >= 0)) {
 					matcher.appendReplacement(matchedPartOfLine, keyValue.value);
 				}
@@ -1087,8 +1132,8 @@ public class Preprocessor {
 			matcher = keyValue.key.matcher(replaceWorkspace.toString());
 			StringBuffer localLine = new StringBuffer();
 			while (matcher.find()) {
-				if ((matcher.start() <= 0 || WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.start() - 1)) >= 0)
-						&& (matcher.end() >= replaceWorkspace.length()
+				if ((!keyValue.wholeStart || matcher.start() <= 0 || WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.start() - 1)) >= 0)
+						&& (!keyValue.wholeEnd || matcher.end() >= replaceWorkspace.length()
 								|| WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.end())) >= 0)) {
 					matcher.appendReplacement(localLine, keyValue.value);
 					linesReplaced = true;
@@ -1219,7 +1264,7 @@ public class Preprocessor {
 		try {
 			File in_file = new File(in_path);
 			source_path = in_file.getParentFile();
-			input = new BufferedReader(new FileReader(in_file));
+			input = new BufferedReader(new InputStreamReader(new FileInputStream(in_file), Main.getSourceCharset()));
 			if (out_pipe != null) {
 				output = new PrintWriter(out_pipe);
 			} else {
@@ -1261,13 +1306,13 @@ public class Preprocessor {
 			copy_list = new ArrayList<String[]>();
 
 			// DaoNH MOD Start: Support charset SHIFT-JIS
-			//input = new BufferedReader(new FileReader(in_file));
+			//input = new BufferedReader(new InputStreamReader(new FileInputStream(in_file), Main.getSourceCharset()));
 			FileInputStream fis = new FileInputStream(in_file);
-			InputStreamReader isr = new InputStreamReader(fis, Charset.forName("SJIS"));
+			InputStreamReader isr = new InputStreamReader(fis, Main.getSourceCharset());
 			input = new BufferedReader(isr);
 			// DaoNH MOD End: Support charset SHIFT-JIS
 			if (out_path != null) {
-				output = new PrintWriter(new FileWriter(out_path));
+				output = new PrintWriter(new java.io.OutputStreamWriter(new java.io.FileOutputStream(out_path), java.nio.charset.StandardCharsets.UTF_8));
 			} else {
 				output = new PrintWriter(System.out);
 			}
@@ -1284,6 +1329,9 @@ public class Preprocessor {
 			if (line_number > 0)
 				System.err.println("Exception at line " + line_number + " : " + line);
 			ex.printStackTrace();
+			// The output stops here; parsing it would translate half a program as if it were whole.
+			RESConfig.getInstance().setInError(true);
+			com.res.common.Diagnostics.add("Preprocessor failed: " + ex, line_number);
 			return;
 		}
 	}

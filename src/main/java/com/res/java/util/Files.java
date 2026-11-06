@@ -1,4 +1,5 @@
 package com.res.java.util;
+import com.res.common.CobolTranslationException;
 /*****************************************************************************
 Copyright 2009 Venkat Krishnamurthy
 This file is part of RES.
@@ -115,15 +116,13 @@ public class Files {
 					if (dir.isDirectory())
 					;
 					else {
-						System.out.println("Cannot create output directory. File of that name exists.");
-						System.exit(-1);
+						throw new CobolTranslationException("Cannot create output directory " + dir + ": a file of that name exists");
 					}
 				else 
-					if(dir.mkdir())
+					if(dir.mkdirs())
 						;
 					else {
-						System.out.println("Cannot create output directory. Failed.");
-						System.exit(-1);
+						throw new CobolTranslationException("Cannot create output directory " + dir);
 					}
 				i = path.indexOf(File.separatorChar);
 			} while (i>0);
@@ -149,9 +148,7 @@ public class Files {
 			}
 		} catch(Exception e){
 			e.printStackTrace();
-			System.out.println("Could not open file "+path);
-			System.out.println("Errors Encountered. Translation terminated.");
-			System.exit(0);
+			throw new CobolTranslationException("Could not open file " + path, null, -1, e);
 		}
 		return null;
 	}
@@ -188,15 +185,13 @@ public class Files {
 					if (dir.isDirectory())
 					;
 					else {
-						System.out.println("Cannot create output directory. File of that name exists.");
-						System.exit(-1);
+						throw new CobolTranslationException("Cannot create output directory " + dir + ": a file of that name exists");
 					}
 				else 
-					if(dir.mkdir())
+					if(dir.mkdirs())
 						;
 					else {
-						System.out.println("Cannot create output directory. Failed.");
-						System.exit(-1);
+						throw new CobolTranslationException("Cannot create output directory " + dir);
 					}
 				i = filePath.indexOf(File.separatorChar);
 			} while (i>0);
@@ -222,9 +217,7 @@ public class Files {
 			}
 		} catch(Exception e){
 			e.printStackTrace();
-			System.out.println("Could not open file "+filePath);
-			System.out.println("Errors Encountered. Translation terminated.");
-			System.exit(0);
+			throw new CobolTranslationException("Could not open file " + filePath, null, -1, e);
 		}
 		return null;
 	}

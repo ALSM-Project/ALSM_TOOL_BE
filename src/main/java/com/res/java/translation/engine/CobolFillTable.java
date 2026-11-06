@@ -110,7 +110,8 @@ public class CobolFillTable extends DepthFirstVisitor {
 			if(file.getOtherData()!=null&&file.getOtherData().size()>0) {
 				ArrayList<Object> a = new ArrayList<Object>();
 				for(Object o:file.getOtherData()) {
-					o=SymbolTable.getScope().lookup((String)o,SymbolConstants.DATA);
+					if(o instanceof String)
+						o=SymbolTable.getScope().lookup((String)o,SymbolConstants.DATA);
 					if(o == null)reportError(n,"Invalid Alternat key in file "+ file.getDataName()+".");
 					else {
 						setRef(((SymbolProperties)o));
@@ -133,6 +134,11 @@ public class CobolFillTable extends DepthFirstVisitor {
 				}
 			}
 		}
+		// CobolFillTable is a singleton: without this the next program of the same run walked the
+		// files of this one again, whose keys were already resolved (ClassCastException).
+		filesToPostProcess.clear();
+		if(dependingOnToPostProcess!=null)
+			dependingOnToPostProcess.clear();
 	}
 
 	@Override
@@ -793,7 +799,10 @@ public class CobolFillTable extends DepthFirstVisitor {
 		if(RESConfig.getInstance().isAllSymbols())
 			props.setRef(true);
 		
-		if(dataName.equalsIgnoreCase("SQLCA")&&props.getLevelNumber()==1&&pictureString==null) {
+		// SQLCA used to be replaced by a few synthetic fields and left to a runtime library that the
+		// export does not have; the SQLCA copybook (the project's or the supplied stand-in) is now
+		// translated like any other group, so model.getSqlca().getSqlcode() exists.
+		if(false&&dataName.equalsIgnoreCase("SQLCA")&&props.getLevelNumber()==1&&pictureString==null) {
 			props.setRef(false);props.setMod(false);props.setFromRESLibrary(true);
 			SymbolProperties tempProps=createDataSymbol("sqlcode",props,"9(8)",CobolSymbol.BINARY,02);
 			tempProps.setIsFormat(false);tempProps.setRef(true);
@@ -1932,12 +1941,14 @@ public class CobolFillTable extends DepthFirstVisitor {
 		isStatementInError=true;
 		RESConfig.getInstance().setInError(true);
 		System.out.println("@CobolSourceFile(\""+((RESNode)n).sourceFile+"\","+String.valueOf(firstTokenInStatement.beginLine)+"):"+msg);
+		com.res.common.Diagnostics.add(msg, firstTokenInStatement.beginLine);
 	}
 
 	public void reportError(String msg) {
 		isStatementInError=true;
 		RESConfig.getInstance().setInError(true);
 		System.out.println("@CobolSourceFile():"+msg);
+		com.res.common.Diagnostics.add(msg, -1);
 	}
 
 	
