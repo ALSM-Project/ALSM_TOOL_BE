@@ -83,19 +83,24 @@ public class ExecSql2Java extends DepthFirstVisitor {
 	public void visit(ExecSqlStatement  n) {
 		sql=sqlInto=null;
 		if(n.nodeChoice1.which==0) { //WHENEVER
-			switch(((NodeChoice)((NodeSequence)n.nodeChoice1.choice).elementAt(1)).which) {
-			case 0: sql="SQLNOTFOUND";break;
-			case 1: sql="SQLERROR";break;
-			case 2: sql="SQLWARNING";break;
-			}
-			sourceLst.add("super.registerHandler(" +sql +",new Paragraph(this) {");
-			sourceLst.add("tab()");
-			sourceLst.add("public CobolMethod run() {");
+			// WHENEVER is not a statement but a standing order for the SQL statements that follow
+			// it in the source: its action is kept and repeated after each of them (see
+			// printWhenever). It was emitted as a registerHandler/Paragraph callback the runtime
+			// has never had.
+			int condition=((NodeChoice)((NodeSequence)n.nodeChoice1.choice).elementAt(1)).which;
+			int mark=sourceLst.size();
 			((NodeSequence)n.nodeChoice1.choice).elementAt(2).accept(cobol2Java);
-			if(!cobol2Java.isLastGotoStatement)
-				sourceLst.add("return null;");
-			sourceLst.add("backTab()");
-			sourceLst.add("}});");
+			java.util.List<String> emitted=sourceLst.subList(mark, sourceLst.size());
+			ArrayList<String> action=new ArrayList<String>(emitted);
+			emitted.clear();
+			boolean doesSomething=false;
+			for(String line:action)
+				if(!line.trim().isEmpty()&&!line.trim().equals(";")&&!line.equals("tab()")&&!line.equals("backTab()"))
+					doesSomething=true;
+			if(doesSomething)
+				whenever.put(condition, action);
+			else
+				whenever.remove(condition);//WHENEVER ... CONTINUE
 		} else  {
 			NodeChoice nodechoice=(NodeChoice)(((NodeSequence)n.nodeChoice1.choice).elementAt(0));
 			switch(nodechoice.which) {
@@ -116,7 +121,12 @@ public class ExecSql2Java extends DepthFirstVisitor {
 				printStoredProcedure(sql=getSQLString(nodechoice.choice));
 				break;
 			case 4://EXECUTE STORED PROECDURE
-				printStoredProcedure(sql=getSQLString(((NodeSequence)nodechoice.choice).elementAt(1)));
+				sql=getSQLString(((NodeSequence)nodechoice.choice).elementAt(1));
+				if(sql.trim().toUpperCase().startsWith("IMMEDIATE")) {
+					printExecuteImmediate(sql.trim().substring("IMMEDIATE".length()).trim());
+					break;
+				}
+				printStoredProcedure(sql);
 				break;
 			case 5://CONNECT :parm
 				printConnect(sql=getSQLString(((NodeSequence)nodechoice.choice).elementAt(1)));
@@ -127,9 +137,27 @@ public class ExecSql2Java extends DepthFirstVisitor {
 			}
 		}
 	}
+	/** Action of the WHENEVER in force per condition: 0 NOT FOUND, 1 SQLERROR, 2 SQLWARNING. */
+	private final java.util.Map<Integer, ArrayList<String>> whenever = new java.util.TreeMap<Integer, ArrayList<String>>();
+
+	/** A program starts with no WHENEVER in force (this visitor is reused for the next program). */
+	public void resetWhenever() {
+		whenever.clear();
+	}
+
+	private java.util.List<Node> declaredCursors = null;
+	/** While a cursor is OPENed: the DECLARE to write out, the others are skipped. */
+	private String declaringCursor = null;
+
+	public void setDeclaredCursors(java.util.List<Node> declarations) {
+		declaredCursors = declarations;
+	}
+
 	public void visit(DeclareCursorStatement n)
 	{
 		String cursorName=n.nodeToken1.tokenImage;
+		if(declaringCursor!=null&&!formatCursorName(cursorName).equals(declaringCursor))
+			return;
 		switch(n.nodeChoice.which) {
 		case 0:
 			String statementName=((NodeToken)n.nodeChoice.choice).tokenImage;
@@ -314,6 +342,16 @@ public class ExecSql2Java extends DepthFirstVisitor {
 
 	@Override
 	public void visit(SQLOpenStatement n) {
+		String opened=formatCursorName(getSQLString(n.relObjectName));
+		if(declaredCursors!=null) {
+			declaringCursor=opened;
+			try {
+				for(Node declaration:declaredCursors)
+					declaration.accept(this);
+			} finally {
+				declaringCursor=null;
+			}
+		}
 		printProgramExceptionHdr();
 		sourceLst.add("__dao().executeStatement(" +
 				formatCursorName(getSQLString(n.relObjectName)) +
@@ -392,7 +430,10 @@ public class ExecSql2Java extends DepthFirstVisitor {
 		setParameters(sql); 
 	
 		if(cursorName!=null) {
+			// A cursor is only kept here; OPEN runs it and FETCH reads it.
 			sourceLst.add("__dao().saveStatement("+formatCursorName(cursorName)+");");
+			printProgramExceptionTail();
+			return;
 		}
 		
 		sourceLst.add("__dao().executeQuery();");
@@ -528,10 +569,60 @@ public class ExecSql2Java extends DepthFirstVisitor {
 		sourceLst.add("tab()");
 	}
 	
+	/**
+	 * Every SQL statement ends by setting SQLCODE (0, +100 for no row, negative on error) when the
+	 * program includes SQLCA: programs loop on it (PERFORM UNTIL SQLCODE NOT = 0), and without it
+	 * such a loop never ended. A non-SQL failure stops the job instead of the whole JVM.
+	 */
 	private void printProgramExceptionTail() {
+		String sqlcode = sqlcodeSetter();
+		if (sqlcode != null)
+			sourceLst.add(sqlcode.replace("%0", "__dao().getSqlCode()") + ";");
 		sourceLst.add("backTab()");
-		sourceLst.add("} catch(SQLException se) { se.printStackTrace(); ");
-		sourceLst.add("} catch(Exception e) { e.printStackTrace(); System.exit(1); }");
+		sourceLst.add("} catch(SQLException se) {");
+		sourceLst.add("tab()");
+		if (sqlcode != null)
+			sourceLst.add(sqlcode.replace("%0", "__dao().sqlCodeOf(se)") + ";");
+		else
+			sourceLst.add("se.printStackTrace();");
+		sourceLst.add("backTab()");
+		sourceLst.add("} catch(Exception e) { throw new RuntimeException(e); }");
+		printWhenever();
+	}
+
+	/** The WHENEVER actions in force, tested on the SQLCODE (and SQLWARN0) just set. */
+	private void printWhenever() {
+		if (whenever.isEmpty())
+			return;
+		SymbolProperties sqlcode = SymbolTable.getScope().lookup("SQLCODE", SymbolConstants.DATA);
+		if (sqlcode == null)
+			return;
+		String code = "CallSupport.asInt(" + NameUtil.getJavaName(sqlcode, false) + ")";
+		SymbolProperties sqlwarn0 = SymbolTable.getScope().lookup("SQLWARN0", SymbolConstants.DATA);
+		for (java.util.Map.Entry<Integer, ArrayList<String>> e : whenever.entrySet()) {
+			String test;
+			switch (e.getKey()) {
+			case 0: test = code + " == 100"; break;
+			case 1: test = code + " < 0"; break;
+			default:
+				if (sqlwarn0 == null)
+					continue;
+				test = "\"W\".equals(String.valueOf(" + NameUtil.getJavaName(sqlwarn0, false) + ").trim())";
+			}
+			sourceLst.add("if (" + test + ") {");
+			sourceLst.add("tab()");
+			sourceLst.addAll(e.getValue());
+			sourceLst.add("backTab()");
+			sourceLst.add("}");
+		}
+	}
+
+	/** Setter template (%0) of the program's SQLCODE, or null when it includes no SQLCA. */
+	private String sqlcodeSetter() {
+		SymbolProperties sqlcode = SymbolTable.getScope().lookup("SQLCODE", SymbolConstants.DATA);
+		if (sqlcode == null)
+			return null;
+		return NameUtil.getJavaName(sqlcode, true);
 	}
 	
 	private String getSQLString(Node... n) {
@@ -570,6 +661,34 @@ public class ExecSql2Java extends DepthFirstVisitor {
 		
 	}
 	
+	/**
+	 * EXECUTE IMMEDIATE :host-var or 'literal': the statement is the text, not a statement with
+	 * a parameter (it came out as "IMMEDIATE ?" with a setBytes the runtime does not have). A
+	 * VARCHAR host variable (49 xxx-LEN COMP, 49 xxx-TEXT) runs its first LEN characters.
+	 */
+	private void printExecuteImmediate(String operand) {
+		String text, length = "-1";
+		if (operand.startsWith(":")) {
+			SymbolProperties host = SymbolTable.getScope().lookup(operand.substring(1).trim(), SymbolConstants.DATA);
+			if (host == null) {
+				printStoredProcedure("EXECUTE IMMEDIATE " + operand);
+				return;
+			}
+			text = "String.valueOf(" + NameUtil.getJavaName(host, false) + ")";
+			if (host.hasChildren() && host.getChildren().size() == 2
+					&& host.getChildren().get(0).getLevelNumber() == 49) {
+				SymbolProperties len = host.getChildren().get(0), body = host.getChildren().get(1);
+				text = "String.valueOf(" + NameUtil.getJavaName(body, false) + ")";
+				length = "CallSupport.asInt(" + NameUtil.getJavaName(len, false) + ")";
+			}
+		} else {
+			text = formatLiteral("\"" + RunTimeUtil.getInstance().stripQuotes(operand) + "\"");
+		}
+		printProgramExceptionHdr();
+		sourceLst.add("__dao().executeImmediate(" + text + ", " + length + ");");
+		printProgramExceptionTail();
+	}
+
 	private void printConnect(String connectionParam) {
 		printProgramExceptionHdr();
 		ArrayList<String> a=TranUtil.get().getParameters(formatCursorName(connectionParam),false);

@@ -1,4 +1,5 @@
 package com.res.java.translation.symbol;
+import com.res.common.CobolTranslationException;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -113,9 +114,7 @@ public class SymbolTable {
     /* a hashing function for strings */
     int hash ( String s ) {
     	if(s==null) {
-    		System.out.println("*** Fatal error: ERROR IN NULL STRING BEING HASHED");
-    		System.exit(-1);
-    		return -1;
+    		throw new CobolTranslationException("A null name was hashed in the symbol table");
     	}
     	else
     		return Math.abs(s.hashCode()) % symbol_table_size;
@@ -124,9 +123,7 @@ public class SymbolTable {
     /* a hashing function for strings */
     int hash ( String s, int table_size ) {
     	if(s==null) {
-    		System.out.println("*** Fatal error: ERROR IN NULL STRING BEING HASHED");
-    		System.exit(-1);
-    		return -1;
+    		throw new CobolTranslationException("A null name was hashed in the symbol table");
     	}
     	else
     		return Math.abs(s.hashCode()) % table_size;

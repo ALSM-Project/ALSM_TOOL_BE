@@ -1,4 +1,5 @@
 package com.res.java.translation.symbol;
+import com.res.common.CobolTranslationException;
 
 
 import java.util.ArrayList;
@@ -76,21 +77,46 @@ public class SymbolUtil {
 				else ClassFile.println(item);
 			}
 
-			for(String item : varLst){			
-				if (item.equals("tab()")) ClassFile.tab();
-				else if (item.equals("backTab()")) ClassFile.backTab();
-				else ClassFile.println(item);
+			// A data item reached through more than one path (a PERFORM VARYING index, a level-88
+			// parent, a copybook pulled in twice) is queued once per path. Java rejects a second
+			// declaration of the same field, and that one error also stops Lombok from generating
+			// any getter or setter, so every field is written once.
+			java.util.Set<String> declaredFields = new java.util.HashSet<String>();
+			java.util.regex.Pattern fieldDeclaration =
+					java.util.regex.Pattern.compile("^private\\s+(.+?)\\s+(\\w+)\\s*(?:=.*)?;\\s*$");
+			// A COMP item is declared twice: as a plain int/String by the model attributes and as
+			// the Record its accessors read. The Record is the one the rest of the class uses.
+			java.util.Set<String> recordFields = new java.util.HashSet<String>();
+			for(String item : varLst) {
+				java.util.regex.Matcher m = fieldDeclaration.matcher(item);
+				if (m.matches() && m.group(1).equals("Record")) recordFields.add(m.group(2));
 			}
-	
-			for(String item : constructorsLst){	
+			for(String item : varLst){
 				if (item.equals("tab()")) ClassFile.tab();
 				else if (item.equals("backTab()")) ClassFile.backTab();
+				else {
+					java.util.regex.Matcher m = fieldDeclaration.matcher(item);
+					if (m.matches()) {
+						if (!m.group(1).equals("Record") && recordFields.contains(m.group(2))) continue;
+						if (!declaredFields.add(m.group(2))) continue;
+					}
+					ClassFile.println(item);
+				}
+			}
+
+			java.util.Set<String> initialised = new java.util.HashSet<String>();
+			for(String item : constructorsLst){
+				if (item.equals("tab()")) ClassFile.tab();
+				else if (item.equals("backTab()")) ClassFile.backTab();
+				else if (item.trim().endsWith(";") && !initialised.add(item.trim())) continue;
 				else ClassFile.println(item);
 			}
 			ClassFile.backTab();
 			ClassFile.println("}");
-			
-			for(String item : setgetLst){		
+
+			printPlainFieldSetters(recordFields);
+
+			for(String item : setgetLst){
 				if (item.equals("tab()")) ClassFile.tab();
 				else if (item.equals("backTab()")) ClassFile.backTab();
 				else ClassFile.println(item);
@@ -101,14 +127,74 @@ public class SymbolUtil {
 		}
 				
 	}
+	private static final String[] PLAIN_TYPES = { "String", "int", "long", "double", "BigDecimal" };
+
+	/**
+	 * A 77 item, an elementary 01 item or an index is a plain field (int, String, ...) whose
+	 * Lombok setter takes only its own type, while a MOVE assigns it whatever the sender is: a
+	 * FILE STATUS string into a PIC 99 item, a number into a PIC X item. Each such field gets one
+	 * setter per type, converting as the MOVE does (Lombok then leaves the setter out).
+	 */
+	private void printPlainFieldSetters(java.util.Set<String> recordFields) {
+		java.util.regex.Pattern fieldDeclaration =
+				java.util.regex.Pattern.compile("^private\\s+(\\w+)\\s+(\\w+)\\s*(?:=.*)?;\\s*$");
+		java.util.Set<String> done = new java.util.HashSet<String>();
+		for (String item : varLst) {
+			java.util.regex.Matcher m = fieldDeclaration.matcher(item.trim());
+			if (!m.matches())
+				continue;
+			String type = m.group(1), name = m.group(2);
+			if (!java.util.Arrays.asList("String", "int", "long", "double", "BigDecimal", "short", "byte", "float").contains(type))
+				continue;
+			if (recordFields.contains(name) || !done.add(name))
+				continue;
+			String setter = "set" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+			boolean handWritten = false;
+			for (String line : setgetLst)
+				if (line.trim().startsWith("public void " + setter + "("))
+					handWritten = true;
+			if (handWritten)
+				continue;
+			ClassFile.println("");
+			ClassFile.println("public void " + setter + "(" + type + " value) {");
+			ClassFile.println("	this." + name + " = value;");
+			ClassFile.println("}");
+			for (String other : PLAIN_TYPES) {
+				if (other.equals(type))
+					continue;
+				ClassFile.println("");
+				ClassFile.println("public void " + setter + "(" + other + " value) {");
+				ClassFile.println("	this." + name + " = " + plainConversion(type, "value") + ";");
+				ClassFile.println("}");
+			}
+		}
+	}
+
+	private static String plainConversion(String type, String value) {
+		switch (type) {
+		case "String": return "jp.co.alsm.config.CallSupport.asString(" + value + ")";
+		case "int": return "jp.co.alsm.config.CallSupport.asInt(" + value + ")";
+		case "long": return "jp.co.alsm.config.CallSupport.asLong(" + value + ")";
+		case "double": return "jp.co.alsm.config.CallSupport.asDouble(" + value + ")";
+		case "float": return "(float) jp.co.alsm.config.CallSupport.asDouble(" + value + ")";
+		case "short": return "(short) jp.co.alsm.config.CallSupport.asInt(" + value + ")";
+		case "byte": return "(byte) jp.co.alsm.config.CallSupport.asInt(" + value + ")";
+		default: return "jp.co.alsm.config.CallSupport.asBigDecimal(" + value + ")";
+		}
+	}
+
 	public void Reset() {
 		headerLst = new ArrayList<String>();
 		classLst = new ArrayList<String>();
 		varLst = new ArrayList<String>();
 		constructorsLst = new ArrayList<String>();
+		// Left out, these two carried one program's field initialisers and 88-level getters
+		// into the next program of the same run (Model01 received CBACT01C's applResult).
+		constructorsLst1 = new ArrayList<String>();
+		Cobol2Java.level88Getters.clear();
 		setgetLst = new ArrayList<String>();
 		modelNameLst = new ArrayList<String>();
-		
+
 		bFlag = false;
 		isFirstRun = true;
 		emittedModelAttrs = new java.util.HashSet<String>();	
@@ -121,6 +207,7 @@ public class SymbolUtil {
 				headerLst.add("");
 				headerLst.add("import org.springframework.stereotype.Component;");
 				headerLst.add("");
+				headerLst.add("import java.math.BigDecimal;");
 				headerLst.add("import jp.co.alsm.common.Constant;");
 				headerLst.add("import jp.co.alsm.common.Record;");
 				headerLst.add("import jp.co.alsm.helper.StringHelper;");
@@ -146,7 +233,11 @@ public class SymbolUtil {
             		  02 FILLER                        PIC  X(250).
 			 */
 			
-			if (props.getGroupDictionary().get(0).contains("filler")) {
+			// A record made only of FILLER (the usual FD record: 01 WKA-REC. 02 FILLER PIC X(237).)
+			// was left out of the Model while the Tasklet reads and writes it through
+			// model.getWkaRec(); it is a group like any other (printModelAttrs skips the FILLER's
+			// accessors and keeps its bytes).
+			if (false) {
 				/*KHONG XOA
 				varLst.add("tab()");
 				constructorsLst.add("tab()");
@@ -228,7 +319,7 @@ public class SymbolUtil {
 
 	    // DAONH MOD Start: Print valid Model attributes only
 //		if(props.getType()!=SymbolConstants.PROGRAM) {
-	    if(props.getType()!=SymbolConstants.PROGRAM && !props.getGroupDictionary().get(0).contains("filler")) {
+	    if(props.getType()!=SymbolConstants.PROGRAM) {
 		// DAONH MOD Start: Print valid Model attributes only
 			
 			// DAONH DEL Start: No need
@@ -1559,14 +1650,22 @@ public class SymbolUtil {
 	}
 
 	public String getFillerSetter(SymbolProperties props, String fillerVal) {
-		String level01Name=getLevel01Name(props);
+		String level01Name=getLevel01Accessor(props);
 		return getLocalFillerSetter(props,fillerVal).replace("super.", ((level01Name==null)?"":(level01Name+'.')));
 	}
 
 	public String getFillerGetter(SymbolProperties props) {
-		String level01Name=getLevel01Name(props);
+		String level01Name=getLevel01Accessor(props);
 		return getGetterString(props,-1,-1).
 			replace("super.", ((level01Name==null)?"":(level01Name+'.')));
+	}
+
+	/** The 01 group a FILLER sits in, as it is reached from the Tasklet (the group lives in the Model). */
+	private String getLevel01Accessor(SymbolProperties props) {
+		while((props=props.getParent())!=null&&!props.is01Group())
+			;
+		if(props==null) return null;
+		return "model.get"+props.getJavaName2()+"()";
 	}
 	
 	private String getLevel01Name(SymbolProperties props) {
@@ -1700,6 +1799,19 @@ public class SymbolUtil {
 	 * @param props SymbolProperties
 	 * @param object Object
 	 */
+	/**
+	 * The VALUE of an elementary 01/77 item. It used to arrive only through printCobolByteAccessors,
+	 * which runs per item; for items after the first group the Model had already been written by
+	 * then, so WS-PGM PIC X(8) VALUE 'ADDONE' started out null. Duplicates are dropped on output.
+	 */
+	private void initialValue(SymbolProperties item) {
+		if (getOptionFormat(item).contains("COMP"))
+			return;
+		String value = getValue(item);
+		if (!value.isEmpty())
+			constructorsLst.add(value);
+	}
+
 	private void printModelAttrs(SymbolProperties props,boolean programScope) {
 		SymbolProperties tmpSymProp = props;
 		varLst.add("tab()");
@@ -1740,11 +1852,15 @@ public class SymbolUtil {
 						//break;
 					}
 				}
-				if (!isCopy && tmpSymProp.getRedefinedBy() == null) {
+				if (!isCopy) {
+					// A 01 group that another item REDEFINES used to be left out of the Model altogether,
+					// so every reference to it failed to compile.
+
 					// Truong hop bien Level 1 la bien duoc gan kieu
 					if (tmpSymProp.getPictureString() != null) {
-						if (tmpSymProp.getLevelNumber() == 1) {
+						if (tmpSymProp.getLevelNumber() == 1 || tmpSymProp.getLevelNumber() == 77) { // 77 items and INDEXED BY names were left out of programs with COPY members
 							varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
+							initialValue(tmpSymProp);
 						}
 					} else {
 						// Truong hop la bien level1 va la bien groups
@@ -1761,6 +1877,7 @@ public class SymbolUtil {
 				// Truong hop bien Level 1 la bien duoc gan kieu
 				if (tmpSymProp.getPictureString() != null) {
 					varLst.add("private " + getJavaType1(tmpSymProp) + " " + tmpSymProp.getJavaName1() + ";");
+					initialValue(tmpSymProp);
 				} else {
 					// Truong hop la bien level1 va la bien groups
 					varLst.add("private " + tmpSymProp.getJavaName2() + " " + tmpSymProp.getJavaName1() + ";");
@@ -1778,6 +1895,16 @@ public class SymbolUtil {
 		//doWriteModel(props,programScope);
 		if (tmpSymProp != null && tmpSymProp.getDataName().equals("RETURN-CODE"))
 		{
+			// The INDEXED BY names of a LINKAGE SECTION table are entered after RETURN-CODE, where
+			// the loop above stops; the Tasklet still sets and reads them through the Model.
+			for (SymbolProperties later = tmpSymProp.getSibling(); later != null; later = later.getSibling()) {
+				if (later.getLevelNumber() == 77 && later.getMajorIndex() != null && !later.isFromRESLibrary()
+						&& later.getPictureString() != null && emittedModelAttrs.add(later.getDataName())) {
+					varLst.add("tab()");
+					varLst.add("private " + getJavaType1(later) + " " + later.getJavaName1() + ";");
+					varLst.add("backTab()");
+				}
+			}
 		   doWriteModel(props,programScope);
 		   doClassEnding(props,!programScope);
 		}
@@ -1820,8 +1947,13 @@ public class SymbolUtil {
 			recordContr.add("public " +props.getJavaName2() +"() {");
 			recordContr.add("tab()");
 			for (SymbolProperties child : childSP) {
+				// A condition-name under an item of the group is a getter on the Tasklet, not a field.
+				if (child.getLevelNumber() == 88) {
+					Cobol2Java.getInstance().doOne88(child);
+					continue;
+				}
 				if (child.isOccurs()) {
-					idx = 0;
+					idx = child.getOffset(); // where the table starts in the record (it was always 0)
 					occursShori(child);
 					continue;
 				}
@@ -1831,7 +1963,7 @@ public class SymbolUtil {
 				if (child.getRedefines() == null) {
 					// continue;
 					// }
-					if (!child.getJavaName1().toLowerCase().contains("filler")) {
+					if (!child.getJavaName1().toLowerCase().startsWith("filler")) {
 						// Write for var
 						recordLst = printVar(child, recordLst);
 						// Write for constructor
@@ -1847,13 +1979,15 @@ public class SymbolUtil {
 						methodLst = printSetGetVar(child, methodLst, false);
 					} else {
 						/* Update 20210831 S */
-						if (child.getPictureString().contains("X(")) {
+						if (child.getPictureString() != null && child.getPictureString().contains("X(")) {
 							idx2 = idx1 + child.getJavaType().maxStringLength;
 						} else {
 							idx2 = idx1 + child.getLength();
 						}
 						/* Update 20210831 E */
-
+						// A FILLER has no accessors, but its VALUE ("  | ") is part of the record.
+						String fillerInit = fillerInitialiser(child, idx1, idx2);
+						if (!fillerInit.isEmpty()) recordContr.add(fillerInit);
 					}
 				/* 20210831 Add S */
 				}
@@ -1866,6 +2000,15 @@ public class SymbolUtil {
 					} else {
 						idx1 = idx2 - reference.getLength();
 					}
+					// The redefining item reads and writes the same bytes as the one it redefines:
+					// both are views on this group's Record, so a MOVE to one shows in the other.
+					// A redefining group (P228-DATEX REDEFINES P228-DATE) is a view as well; only
+					// items with a PICTURE used to get one, so getP228Datex() did not exist.
+					if (!child.getJavaName1().toLowerCase().startsWith("filler")) {
+						recordLst = printVar(child, recordLst);
+						recordContr = printConstructor(child, recordContr, child.getOffset(), child.getOffset() + child.getLength());
+						methodLst = printSetGetVar(child, methodLst, false);
+					}
 				}
 				/* 20210831 Add E */
 				if (child.hasChildren()) {
@@ -1873,7 +2016,10 @@ public class SymbolUtil {
 				}
 				idx1 = idx2;
 			}
-			recordLst.add("private Record record = new Record(new byte[Length]);");
+			// The buffer holds the whole group: its declared length, or the end of its last child
+			// when OCCURS items push the layout past that. "Length" was never declared anywhere.
+			int recordLength = Math.max(Math.max(props.getAdjustedLength(), props.getLength()), idx2);
+			recordLst.add("private Record record = new Record(Record.spaces(" + recordLength + "));");
 			/* 20280831 Add S */
 			recordLst.add("public byte[] getDatas() {");
 			recordLst.add("tab()");
@@ -1960,8 +2106,12 @@ public class SymbolUtil {
 		int idx11 = idx1;
 		int idx22 = 0;
 		for (SymbolProperties child : props.getChildren()) {
+			if (child.getLevelNumber() == 88) {
+				Cobol2Java.getInstance().doOne88(child);
+				continue;
+			}
 			if (child.isOccurs()) {
-				idx = idx11;
+				idx = child.getOffset(); // idx11 is stale after an earlier OCCURS sibling
 				occursShori(child);
 				continue;
 			}
@@ -1971,7 +2121,7 @@ public class SymbolUtil {
 			if (child.getRedefines() == null) {
 				// continue;
 				// }
-				if (!child.getJavaName1().toLowerCase().contains("filler")) {
+				if (!child.getJavaName1().toLowerCase().startsWith("filler")) {
 					// Write for Var
 					recordLst = printVar(child, recordLst);
 					// Write for constructor
@@ -1989,7 +2139,7 @@ public class SymbolUtil {
 				} else {
 					/* Update 20210831 S */
 					//idx22 = idx11 + child.getLength();
-					if (child.getPictureString().contains("X(")) {
+					if (child.getPictureString() != null && child.getPictureString().contains("X(")) {
 						idx22 = idx11 + child.getJavaType().maxStringLength;
 					} else {
 						idx22 = idx11 + child.getLength();
@@ -2004,6 +2154,12 @@ public class SymbolUtil {
 					idx11 = idx22 - reference.getJavaType().maxStringLength;
 				} else {
 					idx11 = idx22 - reference.getLength();
+				}
+				// Same bytes as the redefined item (see the 01-group loop).
+				if (!child.getJavaName1().toLowerCase().startsWith("filler")) { // a redefining group too (WKA-MEIS31 REDEFINES WKA-MESAI3)
+					recordLst = printVar(child, recordLst);
+					recordContr = printConstructor(child, recordContr, child.getOffset(), child.getOffset() + child.getLength());
+					methodLst = printSetGetVar(child, methodLst, false);
 				}
 			}
 			/* 20210831 Add E */
@@ -2047,19 +2203,265 @@ public class SymbolUtil {
 	}
 	private void printOccursNestedChild(SymbolProperties props) {
 		for (SymbolProperties child : props.getChildren()) {
-			if(child.isOccurs()) continue;
+			if(child.isOccurs()) {
+				// A table inside an element of the table (P237-TEIBL OCCURS 5 > P237-SOSKI
+				// OCCURS 700): its items take one index per dimension.
+				SymbolProperties outer = props;
+				while (outer != null && !outer.isOccurs())
+					outer = outer.getParent();
+				if (outer != null) {
+					ArrayList<Integer> strides = new ArrayList<Integer>();
+					strides.add(outer.getLength());
+					printNestedOccurs(child, outer.getJavaName1(), strides, idx);
+				}
+				idx += child.getLength() * child.getMaxOccursInt();
+				continue;
+			}
+			int start = idx;
 			methodLst=printSetGetVar(child,methodLst,true);
 			if (child.hasChildren()) {
+				// A group's items lie inside it: they start where the group starts, and what follows
+				// the group starts after it (counting both shifted TBL-DENN1 past TBL-DEND1's items).
+				idx = start;
 				printOccursNestedChild(child);
+				idx = start + child.getLength();
 			}
 		}
 
 	}
+	/**
+	 * Accessors of a nested OCCURS item and everything in it. table is the Record of the
+	 * outermost table, strides the element length of each enclosing table and start the item's
+	 * position inside the innermost enclosing element.
+	 */
+	private void printNestedOccurs(SymbolProperties occurs, String table, ArrayList<Integer> strides, int start) {
+		ArrayList<Integer> dims = new ArrayList<Integer>(strides);
+		dims.add(occurs.getLength());
+		addDimensionAccessors(occurs, table, dims, start);
+		if (occurs.hasChildren())
+			printNestedOccursItems(occurs, table, dims, start);
+	}
+
+	private void printNestedOccursItems(SymbolProperties group, String table, ArrayList<Integer> dims, int start) {
+		int at = start;
+		for (SymbolProperties child : group.getChildren()) {
+			if (child.getLevelNumber() == 88 || child.getLevelNumber() == 66)
+				continue;
+			if (child.isOccurs()) {
+				printNestedOccurs(child, table, dims, at);
+				at += child.getLength() * child.getMaxOccursInt();
+				continue;
+			}
+			addDimensionAccessors(child, table, dims, at);
+			if (child.hasChildren())
+				printNestedOccursItems(child, table, dims, at);
+			at += child.getLength();
+		}
+	}
+
+	private void addDimensionAccessors(SymbolProperties item, String table, ArrayList<Integer> dims, int start) {
+		if (item.getIsFiller() || item.getJavaName1().toLowerCase().startsWith("filler"))
+			return;
+		StringBuilder params = new StringBuilder(), args = new StringBuilder(), offset = new StringBuilder();
+		for (int d = 0; d < dims.size(); d++) {
+			if (d > 0) {
+				params.append(", ");
+				args.append(", ");
+			}
+			params.append("int index").append(d);
+			args.append("index").append(d);
+			offset.append("index").append(d).append(" * ").append(dims.get(d)).append(" + ");
+		}
+		offset.append(start);
+		String type = item.hasChildren() ? "String" : getJavaType1(item);
+		addIndexedAccessors(methodLst, item, getName(item.getJavaName2()), type, table, params.toString(),
+				args.toString(), offset.toString(), item.getLength());
+	}
+
 	private String getJavaType1(SymbolProperties props)
 	{
 		CobolSymbol sym=(CobolSymbol) props.getJavaType();
 		String s=SymbolConstants.get(sym.type);
+		// A PIC X(1) item is kept as text: the generated code assigns it string literals
+		// ("N", "Y") and compares it with Compare.eq(String, String), never with a char.
+		if(s.equals("char")) s="String";
     	return s;
+	}
+
+	/** Same accessors as addTypedAccessors, for one element of an OCCURS table (index is 0-based). */
+	private void addTypedOccursAccessors(ArrayList<String> out, SymbolProperties child, String javaName2,
+			String type, int start, int length) {
+		// The table is the nearest OCCURS ancestor: for an item of a group inside the element
+		// (TBL-R1 OCCURS 20 > TBL-DEND1 > TBL-DENYY) that is TBL-R1, not the group, which has no
+		// Record of its own.
+		SymbolProperties table = child.getParent();
+		while (table != null && !table.isOccurs())
+			table = table.getParent();
+		if (table == null)
+			table = child.getParent();
+		addTypedOccursAccessors(out, child, javaName2, type, table.getJavaName1(),
+				table.getLength(), start, length);
+	}
+
+	/** Accessors for element index of a table held in the Record named table, one element every stride bytes. */
+	private void addTypedOccursAccessors(ArrayList<String> out, SymbolProperties child, String javaName2,
+			String type, String table, int stride, int start, int length) {
+		addIndexedAccessors(out, child, javaName2, type, table, "int index", "index",
+				"index * " + stride + " + " + start, length);
+	}
+
+	/**
+	 * Accessors for an item of a table of any number of dimensions, held in the Record named
+	 * table: params/args are the index parameters ("int index0, int index1" / "index0, index1")
+	 * and offset the byte position of the item for those indexes.
+	 */
+	private void addIndexedAccessors(ArrayList<String> out, SymbolProperties child, String javaName2,
+			String type, String table, String params, String args, String offset, int length) {
+		String parent = table;
+		String format = child.getPictureString() == null ? "X" : child.getPictureString();
+		String option = child.getDataUsage() == 20 ? ".withOption(\"COMP\")"
+				: child.getDataUsage() == 30 ? ".withOption(\"COMP-3\")" : "";
+		String cell = parent + ".subSequence(" + offset + ", " + offset + " + " + length + ").withFormat(\""
+				+ format + "\")" + option;
+		String set = "Record cell = " + cell + "; cell.set(value, cell.getOffset(), cell.getEnd());";
+		out.add("");
+		if (isNumericJavaType(type)) {
+			String result;
+			if (type.equals("int")) result = cell + ".toInt()";
+			else if (type.equals("long")) result = cell + ".toLong()";
+			else if (type.equals("BigDecimal")) result = cell + ".toBigDecimal()";
+			else if (type.equals("double")) result = cell + ".toBigDecimal().doubleValue()";
+			else if (type.equals("float")) result = cell + ".toBigDecimal().floatValue()";
+			else result = "(" + type + ") " + cell + ".toInt()";
+			out.add("public " + type + " get" + javaName2 + "(" + params + ") {");
+			out.add("tab()");
+			out.add("return " + result + ";");
+			out.add("backTab()");
+			out.add("}");
+			for (String t : new String[] { "int", "long", "BigDecimal", "String" }) {
+				out.add("");
+				out.add("public void set" + javaName2 + "(" + params + ", " + t + " value) {");
+				out.add("tab()");
+				out.add(set);
+				out.add("backTab()");
+				out.add("}");
+			}
+			out.add("");
+			out.add("public void set" + javaName2 + "(" + params + ", double value) {");
+			out.add("tab()");
+			out.add("set" + javaName2 + "(" + args + ", BigDecimal.valueOf(value));");
+			out.add("backTab()");
+			out.add("}");
+			addBytesSetter(out, javaName2, params + ", ", args + ", ");
+		} else {
+			out.add("public String get" + javaName2 + "(" + params + ") {");
+			out.add("tab()");
+			out.add("return " + cell + ".toString();");
+			out.add("backTab()");
+			out.add("}");
+			out.add("");
+			out.add("public void set" + javaName2 + "(" + params + ", String value) {");
+			out.add("tab()");
+			out.add(set);
+			out.add("backTab()");
+			out.add("}");
+			for (String t : new String[] { "int", "long", "double" }) {
+				out.add("");
+				out.add("public void set" + javaName2 + "(" + params + ", " + t + " value) {");
+				out.add("tab()");
+				out.add("set" + javaName2 + "(" + args + ", String.valueOf(value));");
+				out.add("backTab()");
+				out.add("}");
+			}
+			out.add("");
+			out.add("public void set" + javaName2 + "(" + params + ", BigDecimal value) {");
+			out.add("tab()");
+			out.add("set" + javaName2 + "(" + args + ", value.toPlainString());");
+			out.add("backTab()");
+			out.add("}");
+			addBytesSetter(out, javaName2, params + ", ", args + ", ");
+		}
+	}
+
+	/** set<Name>([index,] byte[]): ACCEPT reads the console as bytes, which are the item's text. */
+	private static void addBytesSetter(ArrayList<String> out, String javaName2, String indexParam, String indexArg) {
+		out.add("");
+		out.add("public void set" + javaName2 + "(" + indexParam + "byte[] value) {");
+		out.add("tab()");
+		out.add("set" + javaName2 + "(" + indexArg + "Record.text(value));");
+		out.add("backTab()");
+		out.add("}");
+	}
+
+	private static boolean isNumericJavaType(String type) {
+		return type.equals("byte")||type.equals("short")||type.equals("int")||type.equals("long")
+				||type.equals("float")||type.equals("double")||type.equals("BigDecimal");
+	}
+
+	/**
+	 * Getter and setters for one item of a group, over its Record. A numeric item reads as its
+	 * Java type and accepts any numeric value; a text item accepts numbers too (COBOL lets a
+	 * numeric literal be moved to an alphanumeric item), written left-justified as digits.
+	 */
+	private void addTypedAccessors(ArrayList<String> out, String javaName2, String rec, String type) {
+		String set=rec+".set(value, "+rec+".getOffset(), "+rec+".getEnd());";
+		out.add("");
+		if(isNumericJavaType(type)) {
+			String result;
+			if(type.equals("int")) result=rec+".toInt()";
+			else if(type.equals("long")) result=rec+".toLong()";
+			else if(type.equals("BigDecimal")) result=rec+".toBigDecimal()";
+			else if(type.equals("double")) result=rec+".toBigDecimal().doubleValue()";
+			else if(type.equals("float")) result=rec+".toBigDecimal().floatValue()";
+			else result="("+type+") "+rec+".toInt()";
+			out.add("public "+type+" get"+javaName2+"() {");
+			out.add("tab()");
+			out.add("return "+result+";");
+			out.add("backTab()");
+			out.add("}");
+			for(String t : new String[]{"int","long","BigDecimal","String"}) {
+				out.add("");
+				out.add("public void set"+javaName2+"("+t+" value) {");
+				out.add("tab()");
+				out.add(set);
+				out.add("backTab()");
+				out.add("}");
+			}
+			out.add("");
+			out.add("public void set"+javaName2+"(double value) {");
+			out.add("tab()");
+			out.add(rec+".set(BigDecimal.valueOf(value), "+rec+".getOffset(), "+rec+".getEnd());");
+			out.add("backTab()");
+			out.add("}");
+			addBytesSetter(out, javaName2, "", "");
+		} else {
+			out.add("public String get"+javaName2+"() {");
+			out.add("tab()");
+			out.add("return "+rec+".toString();");
+			out.add("backTab()");
+			out.add("}");
+			out.add("");
+			out.add("public void set"+javaName2+"(String value) {");
+			out.add("tab()");
+			out.add(set);
+			out.add("backTab()");
+			out.add("}");
+			for(String t : new String[]{"int","long","double"}) {
+				out.add("");
+				out.add("public void set"+javaName2+"("+t+" value) {");
+				out.add("tab()");
+				out.add("set"+javaName2+"(String.valueOf(value));");
+				out.add("backTab()");
+				out.add("}");
+			}
+			out.add("");
+			out.add("public void set"+javaName2+"(BigDecimal value) {");
+			out.add("tab()");
+			out.add("set"+javaName2+"(value.toPlainString());");
+			out.add("backTab()");
+			out.add("}");
+			addBytesSetter(out, javaName2, "", "");
+		}
 	}
 	private void ResetVar() {
 		recordLst =new ArrayList<String>();
@@ -2072,14 +2474,37 @@ public class SymbolUtil {
 	//	strParent="";
 	//	idxFiller=1;
 	}
+	/** Length expression of the group being written when it ends in OCCURS DEPENDING ON. */
+	private String odoLength;
+
 	private void occursShori(SymbolProperties child) {
 		// Write for var
 		//idx =0;
 		recordLst = printVar(child, recordLst);
 		recordContr=printConstructor(child,recordContr,idx,child.getLength()*child.getMaxOccursInt()+idx);
-		methodLst=printSetGetVar(child,methodLst,false);
 		if (child.hasChildren()) {
+			// getTbS() / setTbS(String) work on the whole table (group moves); TB-S(I) is one
+			// element, read and written through getTbS(i - 1) / setTbS(i - 1, value).
+			methodLst=printSetGetVar(child,methodLst,false);
+			addTypedOccursAccessors(methodLst, child, getName(child.getJavaName2()), "String",
+					child.getJavaName1(), child.getLength(), 0, child.getLength());
+		} else {
+			// An elementary item with OCCURS is itself the table: its accessors take the index.
+			addTypedOccursAccessors(methodLst, child, getName(child.getJavaName2()), getJavaType1(child),
+					child.getJavaName1(), child.getLength(), 0, child.getLength());
+		}
+		// OCCURS ... DEPENDING ON n: the group is only as long as its first n elements.
+		if (child.getDependingOnOccurs() != null) {
+			String counter = NameUtil.getJavaName(child.getDependingOnOccurs(), false).replaceFirst("^model\\.", "");
+			odoLength = idx + " + " + child.getLength() + " * Math.max(0, jp.co.alsm.config.CallSupport.asInt(" + counter + "))";
+		}
+		if (child.hasChildren()) {
+			// The items are addressed in the table's own Record (which already starts where the
+			// table does), from the start of one element: WKA-ZENME(I) read 78 bytes past the table.
+			int tableStart = idx;
+			idx = 0;
 			printOccursNestedChild(child);
+			idx = tableStart + child.getLength() * child.getMaxOccursInt();
 		}
 	}
 	private String getVarFormat(SymbolProperties child) {
@@ -2095,6 +2520,18 @@ public class SymbolUtil {
 		}
 		return strRet;
 	}
+	/** Statement that writes a FILLER's quoted VALUE into the group's record, or "" when it has none. */
+	private String fillerInitialiser(SymbolProperties child, int start, int end) {
+		ArrayList<SymbolProperties.CoupleValue> values = child.getValues();
+		if (values == null || values.isEmpty()) return "";
+		String literal = values.get(0).value1.toString();
+		if (literal.length() < 2 || !(literal.startsWith("\"") && literal.endsWith("\"")
+				|| literal.startsWith("'") && literal.endsWith("'")))
+			return "";
+		literal = literal.substring(1, literal.length() - 1);
+		return "record.set(\"" + literal.replace("\\", "\\\\").replace("\"", "\\\"") + "\", " + start + ", " + end + ");";
+	}
+
 	private String getValue(SymbolProperties child) {
 		String strRet="";
 		ArrayList<SymbolProperties.CoupleValue> arrayValues = child.getValues();
@@ -2144,99 +2581,22 @@ public class SymbolUtil {
 		String javaName2=getName(child.getJavaName2());		
 		arrayLst.add("");
 		if (!isOccurChild) {
-			if (getJavaType1(child).equals("int")) {
-				arrayLst.add("public int get" + javaName2 + "() {");
-				arrayLst.add("tab()");
-				arrayLst.add("return " + javaName1 + ".toInt();");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(int value) {");
-				arrayLst.add("tab()");
-				arrayLst.add(javaName1 + ".set(value, " + javaName1 + ".getOffset(), "
-						+ javaName1 + ".getEnd());");
-			} else {
-				arrayLst.add("public String get" + javaName2 + "() {");
-				arrayLst.add("tab()");
-				arrayLst.add("return " + javaName1 + ".toString();");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(String value) {");
-				arrayLst.add("tab()");
-				arrayLst.add(javaName1 + ".set(value, " + javaName1 + ".getOffset(), "
-						+ javaName1 + ".getEnd());");
-			}
+			addTypedAccessors(arrayLst, javaName2, javaName1, getJavaType1(child));
+			return arrayLst;
 		} else {
-			if (getJavaType1(child).equals("int")) {
-				arrayLst.add("public int get" + javaName2 + "(int index) {");
-				arrayLst.add("tab()");
-				int idx1= child.getLength();
-				arrayLst.add("return Integer.parseInt(" + child.getParent().getJavaName1() + ".toString(index*"+
-						child.getParent().getLength() + "+" + idx + "," + idx1+ "));");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(int index, int value) {");
-				arrayLst.add("tab()");
-				arrayLst.add("int realIndex = "+child.getParent().getJavaName1() +".getOffset() + index * " +
-						child.getParent().getLength()+ ";");		
-				idx1+=idx;
-				arrayLst.add(child.getParent().getJavaName1() + ".set(value, realIndex + " +
-						idx +", realIndex +" + idx1 + ");");
-				idx = idx1;
-			} else {
-				arrayLst.add("public String get" + javaName2 + "(int index) {");
-				arrayLst.add("tab()");
-				int idx1 = child.getLength();
-				arrayLst.add("return " + child.getParent().getJavaName1() + ".toString(index*"
-						+ child.getParent().getLength() + "+" + idx + "," + idx1 + ");");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(int index, String value) {");
-				arrayLst.add("tab()");
-				arrayLst.add("int realIndex = " + child.getParent().getJavaName1() + ".getOffset() + index * "
-						+ child.getParent().getLength() + ";");
-				idx1 += idx;
-				arrayLst.add(child.getParent().getJavaName1() + ".set(value, realIndex + " + idx + ", realIndex +"
-						+ idx1 + ");");
-				idx = idx1;
-			}
+			// One element of an OCCURS table: addressed by index inside the table's Record.
+			int length = child.getLength();
+			int start = idx;
+			addTypedOccursAccessors(arrayLst, child, javaName2, getJavaType1(child), start, length);
+			idx = start + length;
+			return arrayLst;
 		}
-		arrayLst.add("backTab()");
-		arrayLst.add("}");
-		return arrayLst;
 	}
 	private ArrayList<String> printSetGetVar(SymbolProperties child, ArrayList<String> arrayLst) {
 		String javaName1=getName(child.getJavaName1());
 		String javaName2=getName(child.getJavaName2());		
-		arrayLst.add("");
-			if (getJavaType1(child).equals("int")) {
-				arrayLst.add("public int get" + javaName2 + "() {");
-				arrayLst.add("tab()");
-				arrayLst.add("return record" + javaName2 + ".toInt();");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(int value) {");
-				arrayLst.add("tab()");
-				arrayLst.add("record" + javaName2 + ".set(value, record" + javaName2 + ".getOffset(), record"
-						+ javaName2 + ".getEnd());");
-			} else {
-				arrayLst.add("public String get" + javaName2 + "() {");
-				arrayLst.add("tab()");
-				arrayLst.add("return record" + javaName2 + ".toString();");
-				arrayLst.add("backTab()");
-				arrayLst.add("}");
-				arrayLst.add("");
-				arrayLst.add("public void set" + javaName2 + "(String value) {");
-				arrayLst.add("tab()");
-				arrayLst.add("record" + javaName2 + ".set(value, record" + javaName2 + ".getOffset(), record"
-						+ javaName2 + ".getEnd());");
-			}
-		arrayLst.add("backTab()");
-		arrayLst.add("}");
+		// Through the sub-Record that carries the picture and COMP option, not the raw buffer.
+		addTypedAccessors(arrayLst, javaName2, javaName1, getJavaType1(child));
 		return arrayLst;
 	}
 
@@ -2249,9 +2609,72 @@ public class SymbolUtil {
 		setgetLst.add("backTab()");
 		setgetLst.add("}");
 		setgetLst.add("");
+		// ACCEPT group FROM SYSIN reads the card as bytes.
+		setgetLst.add("public void write(byte[] value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("write(Record.text(value));");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		// COBOL moves numbers into groups too (MOVE 23 TO IO-STATUS).
+		setgetLst.add("public void write(int value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("write(String.valueOf(value));");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		setgetLst.add("public void write(long value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("write(String.valueOf(value));");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		// Fills part of the group with a value repeated to the length (INITIALIZE ... TO SPACES).
+		setgetLst.add("public void valueOf(int offset, int length, String value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("StringBuilder filled = new StringBuilder();");
+		setgetLst.add("while (filled.length() < length) {");
+		setgetLst.add("tab()");
+		setgetLst.add("filled.append(value.isEmpty() ? \" \" : value);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("record.set(filled.substring(0, length), record.getOffset() + offset, record.getOffset() + offset + length);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		// Single-byte access by offset, used for FILLER and INITIALIZE.
+		setgetLst.add("public void setChar(int offset, char value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("record.set(String.valueOf(value), record.getOffset() + offset, record.getOffset() + offset + 1);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		setgetLst.add("public char getChar(int offset) {");
+		setgetLst.add("tab()");
+		setgetLst.add("return record.charAt(offset);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		setgetLst.add("public void setByte(int offset, byte value) {");
+		setgetLst.add("tab()");
+		setgetLst.add("setChar(offset, (char) (value & 0xff));");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
+		setgetLst.add("public byte getByte(int offset) {");
+		setgetLst.add("tab()");
+		setgetLst.add("return (byte) record.charAt(offset);");
+		setgetLst.add("backTab()");
+		setgetLst.add("}");
+		setgetLst.add("");
 		setgetLst.add("public String toString() {");
 		setgetLst.add("tab()");
-		setgetLst.add("return record.toString();");
+		if (odoLength != null) {
+			setgetLst.add("String all = record.toString();");
+			setgetLst.add("return all.substring(0, Math.min(all.length(), " + odoLength + "));");
+			odoLength = null;
+		} else
+			setgetLst.add("return record.toString();");
 		setgetLst.add("backTab()");
 		setgetLst.add("}");
 	}
@@ -2435,24 +2858,20 @@ private void printSetGetGroup( SymbolProperties props) {
 	}
 	
 	public static void reportError() {
-		try{
-			throw new InvalidCobolFormatException("");
-		} catch(Exception e) {
-			e.printStackTrace();
-			System.exit(-1);
-		}
+		throw new CobolTranslationException("Invalid COBOL format");
 	}
 
 	public void reportError(SymbolProperties props,String msg) {
 		System.out.println("@CobolSourceFile(\""+props.getDataDescriptionEntry().sourceFile+"\","+
 				props.getDataDescriptionEntry().line+
 				"):"+msg);
-		System.exit(0);
+		throw new CobolTranslationException(msg, props.getDataDescriptionEntry().sourceFile,
+				props.getDataDescriptionEntry().line);
 	}
 	
 	public void reportError(String msg) {
 		System.out.println("@CobolSourceFile(\""+Main.getContext().getSourceFileName()+"):"+msg);
-		System.exit(0);
+		throw new CobolTranslationException(msg, Main.getContext().getSourceFileName(), -1);
 	}
 	/**
 	 * A copybook is imported as a ready-made model class from the runtime's common.model package

@@ -565,6 +565,9 @@ public class Preprocessor {
 	 */
 	class CoupleValue {
 		int noOfKeyTokens;
+		/** The match must start / end at a word boundary (false for LEADING, TRAILING and :TAG:). */
+		boolean wholeStart = true;
+		boolean wholeEnd = true;
 		Pattern key;
 		String value;
 	}
@@ -591,6 +594,15 @@ public class Preprocessor {
 				return;
 			}
 			StringBuffer subst = new StringBuffer();
+
+			// COBOL-85 REPLACING LEADING ==x== BY ==y== / TRAILING: x is matched at the start / end
+			// of a word instead of as a whole word.
+			boolean leading = false, trailing = false;
+			if (tok.equalsIgnoreCase("LEADING") || tok.equalsIgnoreCase("TRAILING")) {
+				leading = tok.equalsIgnoreCase("LEADING");
+				trailing = !leading;
+				tok = skipSpaces();
+			}
 
 			if (tok.equals("==")) {
 				while ((tok = getNextToken(true, true)) != null && !tok.equals("=="))
@@ -668,6 +680,10 @@ public class Preprocessor {
 			keyValue.key = pattern;
 			keyValue.value = value;
 			keyValue.noOfKeyTokens = sArr_Length;
+			// A tag such as :TAG: (IBM) is replaced inside a word too (:TAG:-REC becomes WS-REC).
+			boolean tag = key.trim().length() > 2 && key.trim().startsWith(":") && key.trim().endsWith(":");
+			keyValue.wholeStart = !trailing && !tag;
+			keyValue.wholeEnd = !leading && !tag;
 			replace.add(keyValue);
 
 			for (int i = 0; i < saveLine.size(); ++i) {
@@ -1072,8 +1088,8 @@ public class Preprocessor {
 			matcher = keyValue.key.matcher(replaceWorkspace.toString());
 			StringBuffer matchedPartOfLine = new StringBuffer();
 			while (matcher.find()) {
-				if ((matcher.start() <= 0 || WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.start() - 1)) >= 0)
-						&& (matcher.end() >= replaceWorkspace.length()
+				if ((!keyValue.wholeStart || matcher.start() <= 0 || WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.start() - 1)) >= 0)
+						&& (!keyValue.wholeEnd || matcher.end() >= replaceWorkspace.length()
 								|| WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.end())) >= 0)) {
 					matcher.appendReplacement(matchedPartOfLine, keyValue.value);
 				}
@@ -1116,8 +1132,8 @@ public class Preprocessor {
 			matcher = keyValue.key.matcher(replaceWorkspace.toString());
 			StringBuffer localLine = new StringBuffer();
 			while (matcher.find()) {
-				if ((matcher.start() <= 0 || WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.start() - 1)) >= 0)
-						&& (matcher.end() >= replaceWorkspace.length()
+				if ((!keyValue.wholeStart || matcher.start() <= 0 || WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.start() - 1)) >= 0)
+						&& (!keyValue.wholeEnd || matcher.end() >= replaceWorkspace.length()
 								|| WORD_DELIMITERS.indexOf(replaceWorkspace.charAt(matcher.end())) >= 0)) {
 					matcher.appendReplacement(localLine, keyValue.value);
 					linesReplaced = true;

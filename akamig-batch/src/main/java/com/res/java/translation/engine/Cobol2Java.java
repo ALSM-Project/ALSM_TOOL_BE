@@ -69,6 +69,9 @@ public class Cobol2Java extends DepthFirstVisitor {
 	private static ArrayList<String> sourceLst = new ArrayList<>();
 	private static ArrayList<String> sourceLstFirst = new ArrayList<>();
 	private static String strMainFunction=null;
+	/** Every paragraph of the program in source order (EXIT paragraphs too), and those written as methods. */
+	private static final ArrayList<String> paragraphOrder = new ArrayList<>();
+	private static final java.util.Set<String> paragraphMethods = new java.util.HashSet<>();
 	
 	class IdOrLit {
 		SymbolProperties id=null;
@@ -329,10 +332,14 @@ public class Cobol2Java extends DepthFirstVisitor {
 			}
 			props=null;
 		}
-        if(delayedStatements!=null)
-        	for(Node nd:delayedStatements) {
-        		nd.accept(execSql2Java);
-        	}
+		// DECLARE CURSOR in the data division is prepared where the cursor is OPENed (that is
+		// when DB2 binds its host variables); run here, its code went to a list nobody wrote out.
+		execSql2Java.setDeclaredCursors(delayedStatements);
+		execSql2Java.resetWhenever();
+		paragraphOrder.clear();
+		paragraphMethods.clear();
+		// Cobol2Java is a singleton: the next program starts with no cursors of its own.
+		delayedStatements = null;
         if(n.procedureBody.paragraphs.nodeListOptional.present()) 
 			n.procedureBody.paragraphs.nodeListOptional.accept(this);
       //  sourceLst.add("doCobolGotoStart();");
@@ -411,6 +418,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 	}
 	@Override
 	public void visit(StopStatement n) {
+		// STOP RUN ends the run unit wherever it is, also inside a PERFORMed paragraph or a called
+		// program; execute() catches the signal and finishes the step normally. "if (true)" keeps
+		// javac from rejecting the statements COBOL allows after it.
+		sourceLst.add("if (true) throw new CobolSupport.StopRun();");
 		//super.visit(n);
 		/* Detete 20210828 S
 		sourceLst.add("System.exit(super.__getReturnCode());");
@@ -1099,6 +1110,18 @@ public class Cobol2Java extends DepthFirstVisitor {
 		sourceLst.add("}");
 	}
 
+	/**
+	 * An I/O error on a file with no FILE STATUS, in a program with no USE declaratives, ends the
+	 * program as on the mainframe: it used to be swallowed, so a READ of a file that could not be
+	 * opened never reached AT END and its loop ran forever.
+	 */
+	private void abendWithoutStatus(SymbolProperties file, String e) {
+		boolean hasStatus = file != null && file.getFileStatus() != null && !file.getFileStatus().isEmpty();
+		if (!hasStatus && useConditions == null)
+			sourceLst.add("if (true) throw new RuntimeException(\"I/O error on " + (file == null ? "file" : file.getDataName())
+					+ " (no FILE STATUS): \" + " + e + ".getMessage(), " + e + ");");
+	}
+
 	private void exceptionPrintStackTrace(String e) {
 		//if (RESConfig.getInstance().isExceptionPrintStackTraceOn())
 			// QuyTV
@@ -1469,7 +1492,14 @@ public class Cobol2Java extends DepthFirstVisitor {
 		// and is not emitted as a method, so going there is leaving the current paragraph; any
 		// other target runs and then the current paragraph ends too. "if (true)" keeps javac from
 		// rejecting the dead statements COBOL allows after a GO TO.
-		if(!props.getDataName().contains("-EXIT"))
+		// Inside a PERFORM range the runner goes on from the target (see printParagraphRunner);
+		// otherwise the target runs here and the range, if any, ends.
+		if(props.getType()==SymbolConstants.PARAGRAPH) {
+			if(!props.getDataName().contains("-EXIT"))
+				sourceLst.add("if (!goTo__(P__"+props.getJavaName1()+")) "+props.getJavaName1()+"();");
+			else
+				sourceLst.add("goTo__(P__"+props.getJavaName1()+");");
+		} else if(!props.getDataName().contains("-EXIT"))
 			sourceLst.add(props.getJavaName1()+"();");
 		sourceLst.add("if (true) return;");
 	}
@@ -1618,6 +1648,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 			}
 		}
 		
+		// Source order of the paragraphs, for PERFORM ... THRU ranges (see printParagraphRunner).
+		if(!paragraphOrder.contains(paragraphProps.getJavaName1()))
+			paragraphOrder.add(paragraphProps.getJavaName1());
+
 		if(paragraphProps.isAlteredParagraph()) {//Altered Go To
 			sourceLst.add("CobolMethod "+paragraphProps.getJavaName1()+"Altered__=null;");
 		}
@@ -1652,6 +1686,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 		}
 		// Update 20210828 E
 		if(!paragraphProps.getDataName().contains("-EXIT")) {
+			paragraphMethods.add(paragraphProps.getJavaName1());
 			sourceLst.add("public void " + paragraphProps.getJavaName1() + "() {");
 			sourceLst.add("tab()");
 			if (paragraphProps.isAlteredParagraph()) {// Not Altered
@@ -1871,6 +1906,95 @@ public class Cobol2Java extends DepthFirstVisitor {
 			super.visit(n);
 	}
 	
+	/**
+	 * The paragraphs as a sequence: P__name is a paragraph's place in the source, perform__(a, b)
+	 * runs the paragraphs a to b in order (the COBOL fall-through within a PERFORM ... THRU range),
+	 * and goTo__(p) called by a GO TO inside a range makes the runner carry on from p, or ends the
+	 * range when p is outside it. EXIT paragraphs have no method; they are just places in the range.
+	 */
+	private static void printParagraphRunner(ArrayList<String> classLst) {
+		if (paragraphOrder.isEmpty())
+			return;
+		for (int i = 0; i < paragraphOrder.size(); i++)
+			classLst.add("private static final int P__" + paragraphOrder.get(i) + " = " + i + ";");
+		classLst.add("private final java.util.ArrayDeque<int[]> ranges__ = new java.util.ArrayDeque<int[]>();");
+		classLst.add("private int jump__ = -1;");
+		classLst.add("");
+		classLst.add("private void perform__(int from, int thru) {");
+		classLst.add("tab()");
+		classLst.add("if (thru < from) thru = from;");
+		classLst.add("ranges__.push(new int[] { from, thru });");
+		classLst.add("int saved = jump__;");
+		classLst.add("try {");
+		classLst.add("tab()");
+		classLst.add("for (int p = from; p <= thru;) {");
+		classLst.add("tab()");
+		classLst.add("jump__ = -1;");
+		classLst.add("run__(p);");
+		classLst.add("if (jump__ == -2) break;");
+		classLst.add("p = jump__ >= 0 ? jump__ : p + 1;");
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("backTab()");
+		classLst.add("} finally {");
+		classLst.add("tab()");
+		classLst.add("ranges__.pop();");
+		classLst.add("jump__ = saved;");
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("");
+		classLst.add("private boolean goTo__(int target) {");
+		classLst.add("tab()");
+		classLst.add("int[] range = ranges__.peek();");
+		classLst.add("if (range != null && target >= range[0] && target <= range[1]) {");
+		classLst.add("tab()");
+		classLst.add("jump__ = target;");
+		classLst.add("return true;");
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("if (range != null) jump__ = -2;");
+		classLst.add("return false;");
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("");
+		classLst.add("private void run__(int p) {");
+		classLst.add("tab()");
+		classLst.add("switch (p) {");
+		for (int i = 0; i < paragraphOrder.size(); i++)
+			if (paragraphMethods.contains(paragraphOrder.get(i)))
+				classLst.add("case " + i + ": " + paragraphOrder.get(i) + "(); break;");
+		classLst.add("default: break;");
+		classLst.add("}");
+		classLst.add("backTab()");
+		classLst.add("}");
+		classLst.add("");
+		paragraphOrder.clear();
+		paragraphMethods.clear();
+	}
+
+	/**
+	 * "+" or "-" when a function argument has no comma before it and starts with a sign (a signed
+	 * number, or an expression with a unary sign): the continuation of the argument before it.
+	 */
+	private static String signedLiteralWithoutComma(Node argument) {
+		if(!(argument instanceof NodeSequence)) return null;
+		NodeSequence seq=(NodeSequence)argument;
+		if(seq.size()<2||!(seq.elementAt(0) instanceof NodeOptional)||((NodeOptional)seq.elementAt(0)).present()) return null;
+		if(!(seq.elementAt(1) instanceof FunctionArgument)) return null;
+		Node choice=((FunctionArgument)seq.elementAt(1)).nodeChoice.choice;
+		if(!(choice instanceof Literal)&&!(choice instanceof ArithmeticExpression)) return null;
+		final String[] first={null};
+		choice.accept(new com.res.cobol.visitor.DepthFirstVisitor() {
+			@Override
+			public void visit(NodeToken t) {
+				if(first[0]==null) first[0]=t.tokenImage.trim();
+			}
+		});
+		return "-".equals(first[0])||"+".equals(first[0])?first[0]:null;
+	}
+
 	@Override
 	public void visit(IntrinsicFunction n) {
 		int[] functionArgType=SymbolConstants.getFunctionArgTypes(((NodeChoice)n.nodeSequence.elementAt(1)).which);
@@ -1919,9 +2043,21 @@ public class Cobol2Java extends DepthFirstVisitor {
 					if(((NodeListOptional)nodeseq.elementAt(1)).present()) {
 						for(Enumeration<Node> e=((NodeListOptional)nodeseq.elementAt(1)).elements();e.hasMoreElements();) {
 							expressionType=0;
-							e.nextElement().accept(this);
+							Node argument=e.nextElement();
+							String sign=signedLiteralWithoutComma(argument);
+							argument.accept(this);
 							saveType=Math.max(saveType,expressionType);
-							exprStrings.add(ExpressionString.getExpression());
+							ExpressionString value=ExpressionString.getExpression();
+							if(sign!=null) {
+								// FUNCTION DATE-OF-INTEGER(FUNCTION INTEGER-OF-DATE(D) - 1): the parser
+								// reads "- 1" as a second argument, a signed literal with no comma before
+								// it; it is the subtraction it was written as.
+								ExpressionString previous=exprStrings.get(exprStrings.size()-1);
+								String number=value.toString().replaceFirst("^[+-]","");
+								previous.literal=new StringBuffer("("+previous.toString()+" "+sign+" "+number+")");
+								continue;
+							}
+							exprStrings.add(value);
 						}
 					}
 					if(functionArgType.length>1) {
@@ -2584,6 +2720,15 @@ public class Cobol2Java extends DepthFirstVisitor {
 					if(procedureProps==null)
 						return;
 					if(!someOrAllConsolidated(procedureProps,procedureThruProps)) {
+						// PERFORM A [THRU B] runs every paragraph from A to B in source order (an
+						// "A THRU A-EXIT" range with A-L01 in between used to run A alone, so a loop
+						// whose next READ sat in A-L01 never ended); a GO TO inside the range jumps
+						// within it.
+						if(procedureProps.getType()==SymbolConstants.PARAGRAPH&&(procedureThruProps==null
+								||procedureThruProps.getType()==SymbolConstants.PARAGRAPH))
+							sourceLst.add("perform__(P__"+procedureProps.getJavaName1()+", P__"
+									+(procedureThruProps==null?procedureProps:procedureThruProps).getJavaName1()+");");
+						else
 						sourceLst.add( procedureProps.getJavaName1() +"();");
 						/*
 						 * sourceLst.add("doCobolPerform(" + procedureProps.getJavaName1() +
@@ -2982,9 +3127,41 @@ public class Cobol2Java extends DepthFirstVisitor {
 			}
 		}
 		if(line.length()>0) {
-			expression.push(line.toString());
-			expressionType=Constants.STRING;
-			sourceLst.add(TranslationTable.getInstance().getAssignString(saveProps, null,false));
+			// STRING ... INTO x [WITH POINTER p] [ON OVERFLOW ...] [NOT ON OVERFLOW ...]: the text is
+			// placed into x from position p (1 when there is no POINTER), the rest of x is left as it
+			// was, p ends one past the last character placed, and OVERFLOW is raised when the text
+			// does not fit or p starts outside x. Assigning the concatenation, as before, cleared x and
+			// ignored the pointer.
+			SymbolProperties pointerProps=null;
+			if(n.nodeOptional.present()) {
+				props=null;
+				((NodeSequence)n.nodeOptional.node).elementAt(2).accept(this);
+				pointerProps=props;
+			}
+			String pointer=pointerProps==null?"1":"CallSupport.asInt("+NameUtil.getJavaName(pointerProps,false)+")";
+			sourceLst.add("{");
+			sourceLst.add("tab()");
+			sourceLst.add("CobolSupport.StringResult stringResult__ = CobolSupport.__string(String.valueOf("
+					+NameUtil.getJavaName(saveProps,false)+"), "+saveProps.getLength()+", "+pointer+", "+line+");");
+			sourceLst.add(NameUtil.getJavaName(saveProps,true).replace("%0","stringResult__.text")+";");
+			if(pointerProps!=null)
+				sourceLst.add(NameUtil.getJavaName(pointerProps,true).replace("%0","stringResult__.pointer")+";");
+			if(n.nodeOptional1.present()) {
+				sourceLst.add("if (stringResult__.overflow) {");
+				sourceLst.add("tab()");
+				((NodeSequence)n.nodeOptional1.node).elementAt(2).accept(this);
+				sourceLst.add("backTab()");
+				sourceLst.add("}");
+			}
+			if(n.nodeOptional2.present()) {
+				sourceLst.add("if (!stringResult__.overflow) {");
+				sourceLst.add("tab()");
+				((NodeSequence)n.nodeOptional2.node).elementAt(3).accept(this);
+				sourceLst.add("backTab()");
+				sourceLst.add("}");
+			}
+			sourceLst.add("backTab()");
+			sourceLst.add("}");
 		}
 	}
 
@@ -3502,7 +3679,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 		sourceLst.add("backTab()");
 		sourceLst.add("} catch(java.io.IOException ioe) {");
 		printFileStatus(props);
-		exceptionPrintStackTrace("ioe");
+		abendWithoutStatus(props, "ioe");
 		String declConditions=props.getDataName();
 		if(props.isFileOpenedInput()) {
 			declConditions+=",1";
@@ -3587,7 +3764,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 		sourceLst.add("backTab()");
 		sourceLst.add("} catch(java.io.IOException ioe) {");
 		sourceLst.add("tab()");
-		exceptionPrintStackTrace("ioe");
+		abendWithoutStatus(fileProps, "ioe");
 		doDeclaratives(declConditions.split(","));
 		sourceLst.add("backTab()");
 		sourceLst.add("}");
@@ -3659,7 +3836,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 		sourceLst.add("backTab()");
 		sourceLst.add("} catch(java.io.IOException ioe) {");
 		sourceLst.add("tab()");
-		exceptionPrintStackTrace("ioe");
+		abendWithoutStatus(fileProps, "ioe");
 		printFileStatus(fileProps);
 		doDeclaratives(declConditions.split(","));
 		sourceLst.add("backTab()");
@@ -3752,7 +3929,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 		sourceLst.add("backTab()");
 		sourceLst.add("} catch(java.io.IOException ioe) {");
 		sourceLst.add("tab()");
-		exceptionPrintStackTrace("ioe");
+		abendWithoutStatus(fileProps, "ioe");
 		printFileStatus(fileProps);
 		doDeclaratives(declConditions.split(","));
 		sourceLst.add("backTab()");
@@ -3766,24 +3943,18 @@ public class Cobol2Java extends DepthFirstVisitor {
 		if(props==null) return;
 		SymbolProperties fileProps = props;props=null;
 		if(n.nodeOptional.present()) {
-			SymbolProperties record=null;
-			for(SymbolProperties k:fileProps.getChildren()) {
-				if(!k.isIndexedFileRecord())continue;
-				record=k;break;
-			}
 			((NodeSequence)n.nodeOptional.node).elementAt(3).accept(this);
-			if(props!=null&&record!=null) {
-				SymbolProperties pk = (SymbolProperties) fileProps.getOtherData2();
-				String keyStr=record.getJavaName1()+".primaryKey()";
-				if(pk==null||!(pk.getOffset()==props.getOffset())) {
-					keyStr=TranslationTable.getInstance().convertType(
-							new ExpressionString(props), Constants.STRING, props.getJavaType().type).toString();
-					keyStr+=","+String.valueOf(props.getOffset())+","+String.valueOf(props.getLength());
-				}
-				else
-					if(pk.getLength()!=props.getLength()) {
-						keyStr+=","+String.valueOf(props.getLength());
-					}
+			if(props!=null) {
+				// The key value is read through the Model like any other item, and its place in the
+				// record goes with it: START KEY > X reads on from the first record whose bytes at
+				// X's position are past X. It used to call primaryKey() on a record variable the
+				// Tasklet does not have.
+				SymbolProperties keyRecord=props;
+				while(keyRecord.getParent()!=null&&keyRecord.getParent().getType()==SymbolConstants.DATA
+						&&keyRecord.getLevelNumber()!=1)
+					keyRecord=keyRecord.getParent();
+				String keyStr="String.valueOf("+NameUtil.getJavaName(props,false)+"),"
+						+String.valueOf(props.getOffset()-keyRecord.getOffset())+","+String.valueOf(props.getLength());
 				NodeChoice nodechoice = (NodeChoice)((NodeSequence)n.nodeOptional.node).elementAt(2);
 				switch(nodechoice.which) {
 				case 0:
@@ -3913,7 +4084,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 			sourceLst.add("backTab()");
 			sourceLst.add("} catch(java.io.IOException ioe) {");
 			sourceLst.add("tab()");
-			exceptionPrintStackTrace("ioe");
+			abendWithoutStatus(props, "ioe");
 			printFileStatus(props);
 			String declConditions=props.getDataName();
 			if(props.isFileOpenedInput()) {
@@ -4452,6 +4623,7 @@ public class Cobol2Java extends DepthFirstVisitor {
 		classLst.add("");
 		classLst.addAll(level88Getters);
 		level88Getters.clear();
+		printParagraphRunner(classLst);
 		// Entry point for CALL ... USING: the caller's values become this program's LINKAGE items,
 		// the program runs, and the items are handed back the same way.
 		classLst.add("/** Entry point used when another program CALLs this one (see CallSupport). */");
@@ -4499,8 +4671,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 				String assignName = child.getOtherName().replace("\"", "");
 				if (assignName.startsWith("S-"))
 					assignName = assignName.substring(2);
-				classLst.add(child.getJavaName1() + ".withAssignName((String) jobParameters.get(\""
-						+ assignName + "\"));");
+				// The DD name lets the file find its path in the environment too, and name itself
+				// in the error when no path was given.
+				classLst.add(child.getJavaName1() + ".withDdName(\"" + assignName + "\").withAssignName("
+						+ "jobParameters == null ? null : (String) jobParameters.get(\"" + assignName + "\"));");
 			}
 			classLst.add("");
 		}
@@ -4539,8 +4713,10 @@ public class Cobol2Java extends DepthFirstVisitor {
 		classLst.add("backTab()");
 		classLst.add("} catch (Exception e) {");
 		classLst.add("tab()");
-		classLst.add("this.logger.error(e.getMessage());");
-		classLst.add("return RepeatStatus.FINISHED;");
+		classLst.add("if (e instanceof CobolSupport.StopRun) return RepeatStatus.FINISHED;");
+		// The failure reaches Spring Batch, so the job ends FAILED instead of reporting COMPLETED.
+		classLst.add("this.logger.error(String.valueOf(e));");
+		classLst.add("throw e;");
 		classLst.add("backTab()");
 		classLst.add("}");
 		classLst.add("");

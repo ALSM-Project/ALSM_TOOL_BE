@@ -152,7 +152,10 @@ public class NameUtil {
 			if (st.size()==1 && frstrun)
 			{
 				props = (SymbolProperties) st.pop();
-				if (props.getLevelNumber()==1)
+				// A 77 item and an INDEXED BY index (created at level 77) live in the Model as well;
+				// without the prefix they were called on the Tasklet, which has no such accessor.
+				// (Special registers such as RETURN-CODE are made at level 77 too, but belong to the Tasklet.)
+				if (props.getLevelNumber()==1||props.getLevelNumber()==77&&!props.isFromRESLibrary())
 				{
 					s="model.";
 					// The reference-modification target repeats the accessor chain, so it needs

@@ -580,6 +580,14 @@ public class TranslationTable {
 		// comparison were against a 1-based subscript: IF X > 3 became "> 2" and IF X > 0
 		// became "> -1". A comparison keeps the value the program wrote.
 		String tmp = expr2.toString();
+		// The types noted here are the COBOL view; the Model's accessors return what they
+		// were generated with (a PIC X(1) item is a String, an OCCURS element a String or an
+		// int), so "getX() - '0' != 0" and "getS() >= getN()" did not compile. Compare has an
+		// overload for every pair, falling back to a COBOL comparison of any two values.
+		if(true) {
+			return DOID_METHODS_CONDITION_OP[(doReverseCondition?REVERSE_OP[op]:op)]
+						                      .replace("%1",expr1.toString()).replace("%2",tmp);
+		}
 		if(Math.max(expr1.type,expr2.type)<CobolSymbol.BIGDECIMAL) {
 			if((expr1.type==Constants.CHAR||expr2.type==Constants.CHAR)&&!(expr1.type==Constants.CHAR&&expr2.type==Constants.CHAR)) {
 				if(expr1.type==Constants.CHAR)

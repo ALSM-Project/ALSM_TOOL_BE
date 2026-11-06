@@ -77,6 +77,11 @@ public class NameUtil {
 		if(props2.getIsFiller())
 			if(!lastSet) return SymbolUtil.getInstance().getFillerGetter(props2);
 			else return SymbolUtil.getInstance().getFillerSetter(props2, "%0");
+
+		// A condition-name (level 88) is a boolean getter on the Tasklet whichever group it sits
+		// in (see doOne88); it is not reached through the model's accessor chain.
+		if(props2.getLevelNumber()==88&&!lastSet)
+			return "get"+getJavaName2(props2)+"("+getJavaIndexes(props2)+")";
 		
 		SymbolProperties props;
 		String s = "";	
@@ -103,10 +108,16 @@ public class NameUtil {
 					s+="set"+"(%0)";
 				}
 			} else {
-				if(!lastSet) {
-					s="get"+getJavaName2(props2)+"()";
+				// A 01 group lives in the Model as an inner class that renders as its text
+				// (toString) and is filled with write(String). These used to come out as bare
+				// getX()/setX(...) on the Tasklet, which has neither.
+				if(props2.getLevelNumber()==88) {
+					// A condition-name is a getter on the Tasklet itself (see doOne88).
+					s=lastSet?"set"+getJavaName2(props2)+"(%0)":"get"+getJavaName2(props2)+"()";
+				} else if(!lastSet) {
+					s="model.get"+getJavaName2(props2)+"().toString()";
 				} else {
-					s="set"+getJavaName2(props2)+"(%0)";
+					s="model.get"+getJavaName2(props2)+"().write(%0)";
 				}
 			}
 			if(NameUtil.appendInstance)
@@ -141,9 +152,15 @@ public class NameUtil {
 			if (st.size()==1 && frstrun)
 			{
 				props = (SymbolProperties) st.pop();
-				if (props.getLevelNumber()==1)
+				// A 77 item and an INDEXED BY index (created at level 77) live in the Model as well;
+				// without the prefix they were called on the Tasklet, which has no such accessor.
+				// (Special registers such as RETURN-CODE are made at level 77 too, but belong to the Tasklet.)
+				if (props.getLevelNumber()==1||props.getLevelNumber()==77&&!props.isFromRESLibrary())
 				{
 					s="model.";
+					// The reference-modification target repeats the accessor chain, so it needs
+					// the same prefix (it came out as a bare getX()).
+					if(doRefModSet) refModSet="model.";
 				}
 				frstrun=false;
 			}
@@ -160,7 +177,7 @@ public class NameUtil {
 				// QuyTV add frefix "model.get" for get item from model
 				s+="model.get" + getJavaName2(props)+"()";
 				//s+=getJavaName2(props)+"()";
-				if(doRefModSet)	refModSet+=getJavaName1(props);
+				if(doRefModSet)	refModSet+="model.get"+getJavaName2(props)+"()";
 			}
 			else
 			if(!lastSet){
@@ -470,7 +487,14 @@ public class NameUtil {
 		
 		if(!lhs.getIsFormat())
 			return "%0";
-		
+
+		// The shared "<item>Fmt_" constants these used to name are no longer declared anywhere
+		// (X.yFmt_ pointed at a class that does not exist), so the format is built where it is used.
+		if(lhs.getJavaType()!=null&&((CobolSymbol)lhs.getJavaType()).pic!=null) {
+			String pic=((CobolSymbol)lhs.getJavaType()).pic.replace("\\","\\\\").replace("\"","\\\"");
+			return "new FieldFormat(\""+getJavaName1(lhs)+"\",\""+pic+"\").format(%0)";
+		}
+
 		SymbolProperties props=lhs;
 		String s = "";
 		Stack<SymbolProperties> st = new Stack<SymbolProperties>();
