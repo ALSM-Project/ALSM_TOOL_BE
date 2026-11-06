@@ -80,6 +80,77 @@ public class Compare {
 
 
 	// Class tests (IF x IS NUMERIC / ALPHABETIC ...) on the text of an item.
+	/*
+	 * Any pair the typed overloads below do not cover (a String accessor against an int, a char
+	 * against a long, ...). Two numbers, or a number and a numeric text, compare by value;
+	 * anything else compares as text, the shorter operand padded with spaces as COBOL does.
+	 */
+	public static final boolean eq(Object o1, Object o2) { return compareAny(o1, o2) == 0; }
+	public static final boolean ne(Object o1, Object o2) { return compareAny(o1, o2) != 0; }
+	public static final boolean lt(Object o1, Object o2) { return compareAny(o1, o2) < 0; }
+	public static final boolean le(Object o1, Object o2) { return compareAny(o1, o2) <= 0; }
+	public static final boolean gt(Object o1, Object o2) { return compareAny(o1, o2) > 0; }
+	public static final boolean ge(Object o1, Object o2) { return compareAny(o1, o2) >= 0; }
+
+	public static final int compareAny(Object o1, Object o2) {
+		if (o1 instanceof byte[]) o1 = new String((byte[]) o1);
+		if (o2 instanceof byte[]) o2 = new String((byte[]) o2);
+		if (o1 instanceof Character) o1 = String.valueOf(o1);
+		if (o2 instanceof Character) o2 = String.valueOf(o2);
+		if (o1 instanceof Number || o2 instanceof Number) {
+			BigDecimal b1 = numberOf(o1), b2 = numberOf(o2);
+			if (b1 != null && b2 != null)
+				return b1.compareTo(b2);
+		}
+		return compareText(o1 == null ? "" : o1.toString(), o2 == null ? "" : o2.toString());
+	}
+
+	/*
+	 * COBOL comparison of two texts: byte by byte in the program's encoding (so HIGH-VALUES is
+	 * above every character, half-width katakana included), the shorter one padded with spaces.
+	 * HIGH-VALUES / LOW-VALUES from CobolFunction (256 times one character) count at the length
+	 * of the other operand, as a figurative constant does.
+	 */
+	public static final int compareText(String o1, String o2) {
+		o1 = figurative(o1 == null ? "" : o1, o2 == null ? 0 : o2.length());
+		o2 = figurative(o2 == null ? "" : o2, o1.length());
+		byte[] b1, b2;
+		try {
+			b1 = jp.co.alsm.common.Record.bytes(o1);
+			b2 = jp.co.alsm.common.Record.bytes(o2);
+		} catch (java.io.UnsupportedEncodingException e) {
+			b1 = o1.getBytes();
+			b2 = o2.getBytes();
+		}
+		int n = Math.max(b1.length, b2.length);
+		for (int i = 0; i < n; i++) {
+			int c1 = i < b1.length ? b1[i] & 0xFF : ' ';
+			int c2 = i < b2.length ? b2[i] & 0xFF : ' ';
+			if (c1 != c2)
+				return c1 < c2 ? -1 : 1;
+		}
+		return 0;
+	}
+
+	private static String figurative(String s, int length) {
+		if (s.length() == 256 && length < 256 && (s.charAt(0) == '\u00FF' || s.charAt(0) == '\u0000')
+				&& s.charAt(255) == s.charAt(0))
+			return s.substring(0, length);
+		return s;
+	}
+
+	private static BigDecimal numberOf(Object o) {
+		if (o instanceof BigDecimal) return (BigDecimal) o;
+		if (o instanceof Number) return new BigDecimal(o.toString());
+		String text = o == null ? "" : o.toString().trim();
+		if (text.isEmpty()) return null;
+		try {
+			return new BigDecimal(text);
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
 	public static final boolean isNumeric(String value) {
 		String text = value.trim();
 		if (text.isEmpty()) {
@@ -168,7 +239,7 @@ public class Compare {
 	}
 	  
    public static final boolean eq(String o1,String o2) {
-		return o1.trim().compareTo(o2.trim())==0;
+		return compareText(o1, o2)==0;
 	}
 	
 	public static final boolean eq(String o1,byte[] o2) {
@@ -180,11 +251,11 @@ public class Compare {
     }
  
     public static final boolean eq(String o1,long o2) {
-    	return eq(o2,o1);
-    }
+		return compareAny(o1, o2) == 0;
+	}
     public static final boolean eq(long o1,String o2) {
-    	return String.valueOf(o1).equals(o2.trim());
-    }
+		return compareAny(o1, o2) == 0;
+	}
  
     public static final boolean eq(long o1,byte[] o2) {
         return eq(new String(o2),String.valueOf(o1));
@@ -244,7 +315,7 @@ public class Compare {
 		}
 		  
 	   public static final boolean ne(String o1,String o2) {
-			return o1.trim().compareTo(o2.trim())!=0;
+			return compareText(o1, o2)!=0;
 		}
 		
 		public static final boolean ne(String o1,byte[] o2) {
@@ -256,12 +327,12 @@ public class Compare {
 	    }
 	    
 	    public static final boolean ne(String o1,long o2) {
-	    	return ne(String.valueOf(o2),o1.trim());
-	    }
+		return compareAny(o1, o2) != 0;
+	}
 	    
 	    public static final boolean ne(long o1,String o2) {
-	    	return ne(String.valueOf(o1),o2.trim());    
-	    }
+		return compareAny(o1, o2) != 0;
+	}
 	 
 	    public static final boolean ne(long o1,byte[] o2) {
 	    	return ne(String.valueOf(o1),new String(o2).trim());
@@ -317,7 +388,7 @@ public class Compare {
 	    }
 		  
 	   public static final boolean lt(String o1,String o2) {
-			return o1.trim().compareTo(o2.trim())<0;
+			return compareText(o1, o2)<0;
 		}
 		
 		public static final boolean lt(String o1,byte[] o2) {
@@ -329,12 +400,12 @@ public class Compare {
 	    }
 	    
 	    public static final boolean lt(String o1,long o2) {
-	    	return lt(o1.trim(),String.valueOf(o2));
-	    }
+		return compareAny(o1, o2) < 0;
+	}
 	    
 	    public static final boolean lt(long o1,String o2) {
-	    	return lt(String.valueOf(o1),o2.trim());
-	    }
+		return compareAny(o1, o2) < 0;
+	}
 	 
 	    public static final boolean lt(long o1,byte[] o2) {
 	    	return lt(String.valueOf(o1),new String(o2).trim());
@@ -390,7 +461,7 @@ public class Compare {
 	    }
 
 	   public static final boolean le(String o1,String o2) {
-			return o1.trim().compareTo(o2.trim())<=0;
+			return compareText(o1, o2)<=0;
 		}
 		
 		public static final boolean le(String o1,byte[] o2) {
@@ -402,12 +473,12 @@ public class Compare {
 	    }
 	    
 	    public static final boolean le(String o1,long o2) {
-	    	return le(o1.trim(),String.valueOf(o2));
-	    }
+		return compareAny(o1, o2) <= 0;
+	}
 	    
 	    public static final boolean le(long o1,String o2) {
-	    	return le(String.valueOf(o1),o2.trim());
-	    }
+		return compareAny(o1, o2) <= 0;
+	}
 	 
 	    public static final boolean le(long o1,byte[] o2) {
 	    	return le(String.valueOf(o1),new String(o2).trim());
@@ -477,7 +548,7 @@ public class Compare {
 	    }
 
 	   public static final boolean gt(String o1,String o2) {
-			return o1.trim().compareTo(o2.trim())>0;
+			return compareText(o1, o2)>0;
 		}
 		
 		public static final boolean gt(String o1,byte[] o2) {
@@ -489,13 +560,12 @@ public class Compare {
 	    }
 	    
 	    public static final boolean gt(String o1,long o2) {
-	    	return gt(o1.trim(),String.valueOf(o2));
-
-	    }
+		return compareAny(o1, o2) > 0;
+	}
 	    
 	    public static final boolean gt(long o1,String o2) {
-	    	return gt(String.valueOf(o1),o2.trim());
-	    }
+		return compareAny(o1, o2) > 0;
+	}
 	 
 	    public static final boolean gt(long o1,byte[] o2) {
 	    	return gt(String.valueOf(o1),new String(o2).trim());
@@ -567,7 +637,7 @@ public class Compare {
 	    }
 
 	    public static final boolean ge(String o1,String o2) {
-			return o1.trim().compareTo(o2.trim())>=0;
+			return compareText(o1, o2)>=0;
 		}
 		public static final boolean ge(String o1,byte[] o2) {
 	        return new String(o2).compareTo(o1) <= 0;
@@ -577,12 +647,11 @@ public class Compare {
 	         return ge(new String(o1),o2);
 	    }
 	    public static final boolean ge(String o1,long o2) {
-	    	return ge(o1.trim(),String.valueOf(o2));
-
-	    }
+		return compareAny(o1, o2) >= 0;
+	}
 	    public static final boolean ge(long o1,String o2) {
-	    	return ge(String.valueOf(o1),o2.trim());
-	    }
+		return compareAny(o1, o2) >= 0;
+	}
 	    public static final boolean ge(long o1,byte[] o2) {
 	    	return ge(String.valueOf(o1),new String(o2).trim());
 	    }

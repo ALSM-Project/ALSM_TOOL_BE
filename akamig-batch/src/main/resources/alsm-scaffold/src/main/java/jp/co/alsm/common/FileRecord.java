@@ -207,12 +207,72 @@ public class FileRecord {
 		write(value, maxRecLen);
 	}
 
+	/** Key of a pending START: the next read skips the records before it. */
+	private String startKey = null;
+	private int startOffset = 0;
+	private int startLength = 0;
+	private boolean startAfter = false;
+
+	/** START without KEY: reading carries on from where the file is. */
+	public void start() {
+	}
+
+	/** START KEY = key: positions at the first record whose key (offset, length in the record) is not below it. */
+	public void startEq(String key, int offset, int length) throws IOException {
+		position(key, offset, length, false);
+	}
+
+	public void startGe(String key, int offset, int length) throws IOException {
+		position(key, offset, length, false);
+	}
+
+	public void startGt(String key, int offset, int length) throws IOException {
+		position(key, offset, length, true);
+	}
+
+	/*
+	 * An INDEXED file is kept as its records in key order (an unloaded VSAM KSDS), so START reads
+	 * it again from the beginning and the next READ NEXT returns the first record at or after
+	 * the key.
+	 */
+	private void position(String key, int offset, int length, boolean after) throws IOException {
+		if (in != null) {
+			closeI();
+			openI();
+		} else if (io != null) {
+			io.seek(0);
+		}
+		StringBuilder padded = new StringBuilder(key == null ? "" : key);
+		while (padded.length() < length)
+			padded.append(' ');
+		startKey = padded.substring(0, length);
+		startOffset = offset;
+		startLength = length;
+		startAfter = after;
+		clearStatus();
+	}
+
 	/** Reads the next record as text; at end of file this ends with an EOFException (status 10). */
 	public String readRecord() throws IOException {
+		while (true) {
+			String record = readNextRecord();
+			if (startKey == null)
+				return record;
+			int end = Math.min(record.length(), startOffset + startLength);
+			String key = startOffset < end ? record.substring(startOffset, end) : "";
+			int c = key.compareTo(startKey);
+			if (startAfter ? c > 0 : c >= 0) {
+				startKey = null;
+				return record;
+			}
+		}
+	}
+
+	private String readNextRecord() throws IOException {
 		if (accessMode != SEQUENTIAL_ACCESS || !(in instanceof java.io.BufferedInputStream)) {
 			byte[] b = new byte[maxRecLen];
 			read(b);
-			return new String(b, Constant.ENCODING);
+			return Record.text(b, 0, b.length);
 		}
 		// Sequential text files (the usual export of a mainframe data set): a record ends at the
 		// record length or at the end of the line, whichever comes first; short lines are padded.
@@ -249,12 +309,12 @@ public class FileRecord {
 		java.util.Arrays.fill(padded, (byte) ' ');
 		System.arraycopy(bytes, 0, padded, 0, Math.min(bytes.length, maxRecLen));
 		isLastOpRead = true;
-		return new String(padded, Constant.ENCODING);
+		return Record.text(padded, 0, padded.length);
 	}
 
 	public void write(String value, int length) throws IOException {
 		byte[] datas = new byte[length];
-		byte[] source = value.getBytes(Constant.ENCODING);
+		byte[] source = Record.bytes(value);
 		System.arraycopy(source, 0, datas, 0, Math.min(source.length, length));
 		for (int i = 0; i < datas.length; i++) {
 			if (datas[i] == 0x00) {
@@ -287,7 +347,7 @@ public class FileRecord {
 	}
 
 	public void rewrite(String str) throws IOException {
-		rewrite(str.getBytes(Constant.ENCODING));
+		rewrite(Record.bytes(str));
 	}
 
 	private void rewrite(byte[] b) throws IOException {
@@ -323,7 +383,7 @@ public class FileRecord {
 	public String read(int len) {
 		try {
 			byte[] b = new byte[len];
-			return read(b) == -1 ? null : new String(b, Constant.ENCODING);
+			return read(b) == -1 ? null : Record.text(b, 0, b.length);
 		} catch (IOException ex) {
 			return null;
 		}

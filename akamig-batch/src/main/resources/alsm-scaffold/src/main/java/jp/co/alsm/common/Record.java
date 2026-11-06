@@ -42,7 +42,7 @@ public class Record implements CharSequence, Serializable {
 
 	public void set(String str, int start, int end) {
 		try {
-			set(str.getBytes(Constant.ENCODING), start, end);
+			set(bytes(str), start, end);
 		} catch (UnsupportedEncodingException e) {
 			set(str.getBytes(), start, end);
 		}
@@ -154,7 +154,7 @@ public class Record implements CharSequence, Serializable {
 
 	public String toString() {
 		try {
-			String value = new String(datas, offset, end - offset, Constant.ENCODING);
+			String value = text(datas, offset, end - offset);
 			return scale > 0 ? formatScale(value) : value;
 		} catch (UnsupportedEncodingException e) {
 			throw new RuntimeException("Unexpected: " + Constant.ENCODING + " not supported");
@@ -163,7 +163,7 @@ public class Record implements CharSequence, Serializable {
 
 	public String toString(int start, int length) {
 		try {
-			String value = new String(datas, offset + start, length, Constant.ENCODING);
+			String value = text(datas, offset + start, length);
 			return scale > 0 ? formatScale(value) : value;
 		} catch (UnsupportedEncodingException e) {
 			throw new RuntimeException("Unexpected: " + Constant.ENCODING + " not supported");
@@ -416,6 +416,58 @@ public class Record implements CharSequence, Serializable {
 		return asString(value.getBytes(Constant.ENCODING));
 	}
 
+	/*
+	 * HIGH-VALUES is the byte 0xFF, which MS932 has no character for: encoded it became "?" and
+	 * decoded U+FFFD, so a key set to HIGH-VALUES never compared equal to HIGH-VALUES again. The
+	 * byte stands for U+00FF both ways (0xFF is never part of a two-byte MS932 character).
+	 */
+	private static final char HIGH_VALUE = '\u00FF';
+
+	/** The bytes of a text in Constant.ENCODING, U+00FF as 0xFF. */
+	public static byte[] bytes(String text) throws UnsupportedEncodingException {
+		if (text.indexOf(HIGH_VALUE) < 0)
+			return text.getBytes(Constant.ENCODING);
+		java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(text.length());
+		int from = 0;
+		for (int i = 0; i <= text.length(); i++) {
+			if (i == text.length() || text.charAt(i) == HIGH_VALUE) {
+				byte[] part = text.substring(from, i).getBytes(Constant.ENCODING);
+				out.write(part, 0, part.length);
+				if (i < text.length())
+					out.write(0xFF);
+				from = i + 1;
+			}
+		}
+		return out.toByteArray();
+	}
+
+	/** The text of bytes in Constant.ENCODING, 0xFF as U+00FF. */
+	public static String text(byte[] data, int offset, int length) throws UnsupportedEncodingException {
+		StringBuilder out = null;
+		int from = offset;
+		for (int i = offset; i < offset + length; i++) {
+			if (data[i] == (byte) 0xFF) {
+				if (out == null)
+					out = new StringBuilder(length);
+				out.append(new String(data, from, i - from, Constant.ENCODING)).append(HIGH_VALUE);
+				from = i + 1;
+			}
+		}
+		if (out == null)
+			return new String(data, offset, length, Constant.ENCODING);
+		return out.append(new String(data, from, offset + length - from, Constant.ENCODING)).toString();
+	}
+
+	/** The text of bytes (ACCEPT reads the console as bytes). */
+	public static String text(byte[] data) {
+		try {
+			return text(data, 0, data.length);
+		} catch (UnsupportedEncodingException e) {
+			return new String(data);
+		}
+	}
+
+	/** Hexadecimal digits of the bytes (not their text: see text(byte[])). */
 	public static String asString(byte[] b) {
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < b.length; i++) {

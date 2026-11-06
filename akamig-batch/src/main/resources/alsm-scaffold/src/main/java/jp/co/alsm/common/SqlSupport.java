@@ -148,6 +148,20 @@ public class SqlSupport {
 		return count;
 	}
 
+	/**
+	 * EXECUTE IMMEDIATE: runs the statement text held in a host variable. A VARCHAR host
+	 * variable gives its length (49-level length item), -1 takes the whole text.
+	 */
+	public void executeImmediate(Object text, int length) throws SQLException {
+		String sql = text == null ? "" : text.toString();
+		if (length >= 0 && length < sql.length())
+			sql = sql.substring(0, length);
+		try (java.sql.Statement s = connection().createStatement()) {
+			s.execute(sql.trim());
+		}
+		sqlCode = 0;
+	}
+
 	public void executeStatement() throws SQLException {
 		statement.execute();
 		sqlCode = 0;
