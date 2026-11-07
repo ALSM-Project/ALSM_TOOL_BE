@@ -568,6 +568,46 @@ public final class CicsNormalizer {
 		}
 	}
 
+	private static final Pattern PARAGRAPH_HEADER = Pattern.compile("(?i)^ {0,3}([A-Z0-9][A-Z0-9-]*)\\s*\\.\\s*$");
+	private static final Pattern SECTION_HEADER = Pattern.compile("(?i)^ {0,3}[A-Z0-9][A-Z0-9-]*\\s+SECTION\\s*\\..*$");
+
+	/**
+	 * A paragraph name defined twice in one section (the CardDemo programs do it with an empty
+	 * EXIT paragraph) makes the translator stop with "Duplicate Paragraph". The later definition
+	 * is renamed: execution still falls through it in the same order, and a PERFORM of the name
+	 * keeps reaching the first one, as it does in the compiler that accepted the program.
+	 */
+	private static void renameDuplicateParagraphs(List<String> lines, List<Change> changes) {
+		boolean inProcedure = false;
+		java.util.Map<String, Integer> seen = new java.util.HashMap<String, Integer>();
+		for (int i = 0; i < lines.size(); i++) {
+			String area = codeArea(lines.get(i));
+			if (!inProcedure) {
+				inProcedure = area.matches("(?i)^\\s*PROCEDURE\\s+DIVISION\\b.*");
+				continue;
+			}
+			if (SECTION_HEADER.matcher(area).matches()) {
+				seen.clear();
+				continue;
+			}
+			Matcher header = PARAGRAPH_HEADER.matcher(area);
+			if (!header.matches())
+				continue;
+			String name = header.group(1).toUpperCase(Locale.ROOT);
+			Integer count = seen.get(name);
+			if (count == null) {
+				seen.put(name, 1);
+				continue;
+			}
+			seen.put(name, count + 1);
+			String renamed = header.group(1) + "-D" + count;
+			String line = lines.get(i);
+			lines.set(i, line.substring(0, Math.min(CODE_START, line.length())) + area.replace(header.group(1), renamed)
+					+ slice(line, CODE_END, Integer.MAX_VALUE));
+			changes.add(new Change("DUPLICATE_PARAGRAPH_RENAMED", i + 1, header.group(1) + " defined again, renamed " + renamed));
+		}
+	}
+
 	/** ',' / ';' as plain separators (STRING A, B ...) are legal COBOL the grammar rejects. */
 	private static String removeSeparatorCommas(String line, int lineNo, List<Change> changes) {
 		if (isComment(line))
@@ -635,6 +675,7 @@ public final class CicsNormalizer {
 				inSql = false;
 		}
 		removeEmptyInputOutputSection(working, changes);
+		renameDuplicateParagraphs(working, changes);
 
 		// Code areas joined with '\n', so a block spanning lines is one match and a stream offset
 		// maps straight back to (line, column).
