@@ -47,6 +47,8 @@ public class Main {
 	
 	/** Charset of the COBOL sources and copybooks (-encoding); the intermediate file is always UTF-8. */
 	private static java.nio.charset.Charset sourceCharset = java.nio.charset.StandardCharsets.UTF_8;
+	/** The charset given with -encoding; null when none was, then each file is read as UTF-8 or, if it is not valid UTF-8, MS932 (SourceEncoding). */
+	private static java.nio.charset.Charset explicitCharset;
 	/** Pass-1 index of a project conversion (-project); null when single files are converted. */
 	private static ProjectIndex projectIndex;
 	/** Extra folders searched for copybooks (-I). */
@@ -63,6 +65,11 @@ public class Main {
 
 	public static java.nio.charset.Charset getSourceCharset() {
 		return sourceCharset;
+	}
+
+	/** The charset of -encoding, or null to let SourceEncoding decide per file. */
+	public static java.nio.charset.Charset getExplicitCharset() {
+		return explicitCharset;
 	}
 
 	public static ProjectIndex getProjectIndex() {
@@ -157,6 +164,9 @@ public class Main {
 				}
 				// DaoNH MOD Start: Create new directory for each cobol program name
 			}
+			if (instance.projectRoot == null)
+				for (String file : SourceEncoding.takeFallbacks())
+					System.out.println("warning: " + SourceEncoding.warning(file));
 /*
 			// DaoNH ADD Start: Skip copy file in case parsing process has error
 			if (!RESConfig.getInstance().isInError()) {
@@ -634,6 +644,7 @@ public class Main {
 					break;
 				try {
 					sourceCharset = java.nio.charset.Charset.forName(args[i]);
+					explicitCharset = sourceCharset;
 				} catch (IllegalArgumentException e) {
 					throw new CobolTranslationException("Unknown encoding: " + args[i]);
 				}

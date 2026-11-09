@@ -225,7 +225,7 @@ public class Preprocessor {
 		output.println("# " + 1 + " \"" + copyClass.copyName + "\"  ");
 
 		try {
-			input = new BufferedReader(new InputStreamReader(new FileInputStream(copyClass.copy_file), Main.getSourceCharset()));
+			input = new BufferedReader(SourceEncoding.reader(copyClass.copy_file, Main.getExplicitCharset()));
 			preprocessMainline();
 		} catch (Exception ex) {
 			System.err.println("IO Exception while processing COPY line " + line_number + " " + line);
@@ -376,7 +376,7 @@ public class Preprocessor {
 		output.println("# " + 1 + " \"" + copyClass.copyName + "\"  ");
 
 		try {
-			input = new BufferedReader(new InputStreamReader(new FileInputStream(copyClass.copy_file), Main.getSourceCharset()));
+			input = new BufferedReader(SourceEncoding.reader(copyClass.copy_file, Main.getExplicitCharset()));
 			preprocessMainline();
 		} catch (Exception ex) {
 			System.err.println("IO Exception while processing COPY line " + line_number + " " + line);
@@ -1264,7 +1264,7 @@ public class Preprocessor {
 		try {
 			File in_file = new File(in_path);
 			source_path = in_file.getParentFile();
-			input = new BufferedReader(new InputStreamReader(new FileInputStream(in_file), Main.getSourceCharset()));
+			input = new BufferedReader(SourceEncoding.reader(in_file, Main.getExplicitCharset()));
 			if (out_pipe != null) {
 				output = new PrintWriter(out_pipe);
 			} else {
@@ -1307,9 +1307,7 @@ public class Preprocessor {
 
 			// DaoNH MOD Start: Support charset SHIFT-JIS
 			//input = new BufferedReader(new InputStreamReader(new FileInputStream(in_file), Main.getSourceCharset()));
-			FileInputStream fis = new FileInputStream(in_file);
-			InputStreamReader isr = new InputStreamReader(fis, Main.getSourceCharset());
-			input = new BufferedReader(isr);
+			input = new BufferedReader(SourceEncoding.reader(in_file, Main.getExplicitCharset()));
 			// DaoNH MOD End: Support charset SHIFT-JIS
 			if (out_path != null) {
 				output = new PrintWriter(new java.io.OutputStreamWriter(new java.io.FileOutputStream(out_path), java.nio.charset.StandardCharsets.UTF_8));

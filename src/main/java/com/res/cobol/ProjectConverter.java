@@ -92,7 +92,10 @@ public class ProjectConverter {
 
 	/** Copies the COBOL files of the project into workRoot, normalizing each one. */
 	private int normalizeInto(Path workRoot) throws IOException {
-		final java.nio.charset.Charset cs = Main.getSourceCharset();
+		// Without -encoding each file is decoded as UTF-8 or, failing that, MS932, and the copy is
+		// written as UTF-8 so every later reader sees the same text.
+		final java.nio.charset.Charset explicit = Main.getExplicitCharset();
+		final java.nio.charset.Charset cs = explicit != null ? explicit : StandardCharsets.UTF_8;
 		final int[] rewritten = { 0 };
 		Files.walkFileTree(projectRoot, new java.nio.file.SimpleFileVisitor<Path>() {
 			@Override
@@ -112,7 +115,17 @@ public class ProjectConverter {
 				int dot = name.lastIndexOf('.');
 				String ext = dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
 				if (ProjectIndex.PROGRAM_EXTENSIONS.contains(ext) || ProjectIndex.COPYBOOK_EXTENSIONS.contains(ext)) {
-					String text = new String(Files.readAllBytes(file), cs);
+					SourceEncoding.Decoded decoded = SourceEncoding.decode(Files.readAllBytes(file), explicit);
+					if (decoded.fellBack) {
+						String note = SourceEncoding.warning(projectRoot.relativize(file).toString().replace('\\', '/'));
+						if (encodingNotes.add(note))
+							System.out.println("  warning: " + note);
+					}
+					for (String note : SourceEncoding.undecodable(decoded,
+							projectRoot.relativize(file).toString().replace('\\', '/')))
+						if (encodingNotes.add(note))
+							System.out.println("  warning: " + note);
+					String text = decoded.text;
 					CicsNormalizer.Result result = CicsNormalizer.normalize(text);
 					hoists.putAll(result.hoists);
 					needsSupport |= result.needsSupportCopybook;
@@ -136,6 +149,8 @@ public class ProjectConverter {
 	private boolean needsSupport;
 	private final Map<String, Integer> normalizationChanges = new java.util.TreeMap<String, Integer>();
 	private final List<String> systemCopybooks = new ArrayList<String>();
+	/** Files read as MS932 because they are not valid UTF-8 (no -encoding); part of the report's warnings. */
+	private final java.util.Set<String> encodingNotes = new java.util.LinkedHashSet<String>();
 	private Path sourceRoot;
 
 	private int run(Path workRoot) throws IOException {
@@ -144,7 +159,7 @@ public class ProjectConverter {
 		System.out.println("Normalized " + rewritten + " file(s) (CICS blocks, separators, empty sentences)");
 
 		System.out.println("Pass 1: indexing " + projectRoot);
-		ProjectIndex index = ProjectIndex.scan(workRoot, Main.getSourceCharset());
+		ProjectIndex index = ProjectIndex.scan(workRoot, Main.getExplicitCharset());
 		// Stand-ins for system copybooks a project never ships (CICS, DB2); a real one wins.
 		Path systemDir = workRoot.resolve(".alsm-system-copybooks");
 		Files.createDirectories(systemDir);
@@ -386,7 +401,7 @@ public class ProjectConverter {
 	private static String elementaryFields(Path cobol) throws IOException {
 		StringBuilder fields = new StringBuilder();
 		boolean inData = false;
-		for (String raw : Files.readAllLines(cobol, Main.getSourceCharset())) {
+		for (String raw : SourceEncoding.lines(cobol, Main.getExplicitCharset())) {
 			if (raw.length() > 6 && (raw.charAt(6) == '*' || raw.charAt(6) == '/'))
 				continue;
 			String line = raw.length() > 72 ? raw.substring(0, 72) : raw;
@@ -615,7 +630,20 @@ public class ProjectConverter {
 		return out.append('"').toString();
 	}
 
+	/** The index's warnings plus the files read as MS932; paths inside the work copy are shown as the project's own. */
+	private List<String> warnings(ProjectIndex index) {
+		for (String file : SourceEncoding.takeFallbacks()) {
+			Path path = Paths.get(file);
+			encodingNotes.add(SourceEncoding.warning(path.startsWith(sourceRoot)
+					? sourceRoot.relativize(path).toString().replace('\\', '/') : file));
+		}
+		java.util.Set<String> all = new java.util.LinkedHashSet<String>(index.getWarnings());
+		all.addAll(encodingNotes);
+		return new ArrayList<String>(all);
+	}
+
 	private void writeReport(ProjectIndex index, List<Outcome> outcomes) throws IOException {
+		List<String> warnings = warnings(index);
 		int ok = 0;
 		for (Outcome o : outcomes)
 			if (o.success)
@@ -671,7 +699,7 @@ public class ProjectConverter {
 		j.append("],\n");
 		j.append("  \"warnings\": [");
 		first = true;
-		for (String w : index.getWarnings()) {
+		for (String w : warnings) {
 			j.append(first ? "" : ", ").append(json(w));
 			first = false;
 		}
@@ -714,9 +742,9 @@ public class ProjectConverter {
 			for (String name : index.unresolvedCalls())
 				m.append("- ").append(name).append("\n");
 		}
-		if (!index.getWarnings().isEmpty()) {
+		if (!warnings.isEmpty()) {
 			m.append("\n## Warnings\n\n");
-			for (String w : index.getWarnings())
+			for (String w : warnings)
 				m.append("- ").append(w).append("\n");
 		}
 		Files.write(outputDir.resolve("conversion_report.md"), m.toString().getBytes(StandardCharsets.UTF_8));
