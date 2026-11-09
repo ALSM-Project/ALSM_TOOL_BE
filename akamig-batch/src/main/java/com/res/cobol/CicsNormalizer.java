@@ -685,6 +685,46 @@ public final class CicsNormalizer {
 		return line.substring(0, Math.min(CODE_START, line.length())) + area + tail;
 	}
 
+	private static final Pattern TOP_OF_FORM_NAME = Pattern.compile("(?i)\\bC01\\s+IS\\s+([A-Z][A-Z0-9-]*)");
+
+	/**
+	 * SPECIAL-NAMES: C01 IS name makes name the top-of-form channel, used as WRITE ... AFTER name.
+	 * The translator reads name as a data item and stops at it ("Unknown Symbol"); channel 1 is
+	 * the top of the page, which AFTER ADVANCING PAGE says. Other channels have no such form and
+	 * are left alone.
+	 */
+	private static void rewriteChannelMnemonics(List<String> lines, List<Change> changes) {
+		List<String> names = new ArrayList<String>();
+		int procedure = -1;
+		for (int i = 0; i < lines.size() && procedure < 0; i++) {
+			String area = codeArea(lines.get(i));
+			if (area.toUpperCase(Locale.ROOT).matches("^\\s*PROCEDURE\\s+DIVISION\\b.*")) {
+				procedure = i;
+				break;
+			}
+			Matcher name = TOP_OF_FORM_NAME.matcher(area);
+			while (name.find())
+				names.add(name.group(1).toUpperCase(Locale.ROOT));
+		}
+		if (names.isEmpty() || procedure < 0)
+			return;
+		for (int i = procedure + 1; i < lines.size(); i++) {
+			String line = lines.get(i);
+			String area = codeArea(line);
+			String replaced = area;
+			for (String name : names)
+				replaced = Pattern.compile("(?i)(?<![A-Z0-9-])(AFTER|BEFORE)(\\s+ADVANCING)?\\s+" + Pattern.quote(name)
+						+ "(?![A-Z0-9-])").matcher(replaced).replaceAll("$1 ADVANCING PAGE");
+			if (replaced.equals(area))
+				continue;
+			replaced = replaced.replaceAll("\\s+$", "");
+			if (replaced.length() > CODE_END - CODE_START)
+				continue;
+			lines.set(i, withArea(line, replaced));
+			changes.add(new Change("CHANNEL_MNEMONIC_AS_PAGE", i + 1, "AFTER/BEFORE the C01 mnemonic written as ADVANCING PAGE"));
+		}
+	}
+
 	/**
 	 * EVALUATE TRUE ... WHEN cond-name AND other (a compound condition starting with a condition
 	 * name) stops the parser at the AND, though it takes the same condition once it sits inside
@@ -820,6 +860,7 @@ public final class CicsNormalizer {
 		removeEmptyInputOutputSection(working, changes);
 		renameDuplicateParagraphs(working, changes);
 		wrapCompoundWhenConditions(working, changes);
+		rewriteChannelMnemonics(working, changes);
 
 		// Code areas joined with '\n', so a block spanning lines is one match and a stream offset
 		// maps straight back to (line, column).
