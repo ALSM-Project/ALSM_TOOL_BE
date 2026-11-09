@@ -56,6 +56,8 @@ public class Main {
 	private String projectRoot;
 	private String basePackage = "jp.co.alsm.batch";
 	private boolean scaffold;
+	/** With -project: translate only these programs (PROGRAM-ID or file name); the whole project is still indexed. */
+	private final java.util.List<String> onlyPrograms = new ArrayList<String>();
 	/** With -scaffold: compile the result with Maven and stub the programs whose Java does not compile. */
 	private boolean verifyBuild = true;
 
@@ -130,8 +132,11 @@ public class Main {
 				System.out.println("Options: " + context.getOptionsVerbose().toString());
 			}
 			if (instance.projectRoot != null) {
-				code = new ProjectConverter(instance, instance.projectRoot, RESConfig.getInstance().getOutputDir(),
-						instance.basePackage, instance.scaffold, instance.verifyBuild).run();
+				ProjectConverter converter = new ProjectConverter(instance, instance.projectRoot,
+						RESConfig.getInstance().getOutputDir(), instance.basePackage, instance.scaffold,
+						instance.verifyBuild);
+				converter.setOnly(instance.onlyPrograms);
+				code = converter.run();
 			} else if (!RESConfig.getInstance().isDoListDir()) {
 				instance.execute(args[i]);
 			} else {
@@ -637,6 +642,11 @@ public class Main {
 					break;
 				for (String dir : args[i].split(java.util.regex.Pattern.quote(File.pathSeparator)))
 					includeDirs.add(new File(dir));
+			} else if (args[i].substring(1).equalsIgnoreCase("only")) {
+				if (++i >= args.length || args[i].startsWith("-"))
+					break;
+				for (String name : args[i].split(","))
+					onlyPrograms.add(name);
 			} else if (args[i].substring(1).equalsIgnoreCase("scaffold")) {
 				scaffold = true;
 			} else if (args[i].substring(1).equalsIgnoreCase("noverify")) {
@@ -687,8 +697,10 @@ public class Main {
 
 	private static void displayProgramUsageAndExit() {
 		System.out.println("\nUsage: java -jar akaBatch-1.0.jar -project <cobol-folder> -odir <output-folder>"
-				+ " [-basePackage jp.co.alsm.batch] [-encoding MS932] [-I dir;dir] [-scaffold [-noverify]] [-fixed|-free]");
+				+ " [-basePackage jp.co.alsm.batch] [-encoding MS932] [-I dir;dir] [-only prog,prog] [-scaffold [-noverify]] [-fixed|-free]");
 		System.out.println("\t-project folder\t: converts every program of the folder (copybooks found anywhere in it).");
+		System.out.println("  -only names: with -project, translates just these programs (PROGRAM-ID or file name, comma separated);");
+		System.out.println("               the whole folder is still indexed, so copybooks and calls resolve as in a full run.");
 		System.out.println("\t-scaffold \t: writes a complete Maven project, then compiles it (needs mvn on the PATH)");
 		System.out.println("\t\t\t  and replaces a program whose Java does not compile with a stub; -noverify skips that.");
 		System.out.println("\nOR\n\nUsage: java -jar AkaMig.jar [options] <Source-File-Name>");

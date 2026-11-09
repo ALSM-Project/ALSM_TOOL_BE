@@ -39,6 +39,8 @@ public class ProjectConverter {
 	private final String basePackage;
 	private final boolean scaffold;
 	private final boolean verifyBuild;
+	/** Lower-case names (PROGRAM-ID, file name with or without extension) of the only programs to translate; empty = all. */
+	private java.util.Set<String> only = new java.util.HashSet<String>();
 
 	ProjectConverter(Main main, String projectRoot, String outputDir, String basePackage, boolean scaffold,
 			boolean verifyBuild) {
@@ -49,6 +51,26 @@ public class ProjectConverter {
 		this.basePackage = basePackage;
 		this.scaffold = scaffold;
 		this.verifyBuild = verifyBuild;
+	}
+
+	/**
+	 * Restricts pass 2 to the named programs. The whole project is still indexed, so copybooks and
+	 * called programs resolve exactly as in a full run; only the translation is skipped for the rest.
+	 */
+	void setOnly(java.util.Collection<String> names) {
+		only = new java.util.HashSet<String>();
+		for (String name : names)
+			if (name != null && !name.trim().isEmpty())
+				only.add(name.trim().toLowerCase(Locale.ROOT));
+	}
+
+	private boolean selected(ProjectIndex.ProgramInfo info) {
+		if (only.isEmpty())
+			return true;
+		String file = info.file.getFileName().toString().toLowerCase(Locale.ROOT);
+		int dot = file.lastIndexOf('.');
+		return only.contains(info.programId.toLowerCase(Locale.ROOT)) || only.contains(file)
+				|| (dot > 0 && only.contains(file.substring(0, dot)));
 	}
 
 	/** Returns 0 when the run completed (even if some programs failed), 1 when it could not start. */
@@ -153,7 +175,10 @@ public class ProjectConverter {
 		System.out.println("Pass 2: translating");
 		List<Outcome> outcomes = new ArrayList<Outcome>();
 		for (Map.Entry<String, ProjectIndex.ProgramInfo> entry : index.getPrograms().entrySet())
-			outcomes.add(translate(entry.getValue(), javaRoot, programPackage));
+			if (selected(entry.getValue()))
+				outcomes.add(translate(entry.getValue(), javaRoot, programPackage));
+		if (!only.isEmpty() && outcomes.isEmpty())
+			throw new CobolTranslationException("No program of the project matches -only " + only);
 
 		if (scaffold) {
 			writeScaffold(outcomes);

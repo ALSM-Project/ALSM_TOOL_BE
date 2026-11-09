@@ -568,6 +568,189 @@ public final class CicsNormalizer {
 		}
 	}
 
+	private static final Pattern PARAGRAPH_HEADER = Pattern.compile("(?i)^ {0,3}([A-Z0-9][A-Z0-9-]*)\\s*\\.\\s*$");
+	private static final Pattern SECTION_HEADER = Pattern.compile("(?i)^ {0,3}[A-Z0-9][A-Z0-9-]*\\s+SECTION\\s*\\..*$");
+
+	/**
+	 * A paragraph name defined twice in one section (the CardDemo programs do it with an empty
+	 * EXIT paragraph) makes the translator stop with "Duplicate Paragraph". The later definition
+	 * is renamed: execution still falls through it in the same order, and a PERFORM of the name
+	 * keeps reaching the first one, as it does in the compiler that accepted the program.
+	 */
+	private static void renameDuplicateParagraphs(List<String> lines, List<Change> changes) {
+		boolean inProcedure = false;
+		java.util.Map<String, Integer> seen = new java.util.HashMap<String, Integer>();
+		for (int i = 0; i < lines.size(); i++) {
+			String area = codeArea(lines.get(i));
+			if (!inProcedure) {
+				inProcedure = area.matches("(?i)^\\s*PROCEDURE\\s+DIVISION\\b.*");
+				continue;
+			}
+			if (SECTION_HEADER.matcher(area).matches()) {
+				seen.clear();
+				continue;
+			}
+			Matcher header = PARAGRAPH_HEADER.matcher(area);
+			if (!header.matches())
+				continue;
+			String name = header.group(1).toUpperCase(Locale.ROOT);
+			Integer count = seen.get(name);
+			if (count == null) {
+				seen.put(name, 1);
+				continue;
+			}
+			seen.put(name, count + 1);
+			String renamed = header.group(1) + "-D" + count;
+			String line = lines.get(i);
+			lines.set(i, line.substring(0, Math.min(CODE_START, line.length())) + area.replace(header.group(1), renamed)
+					+ slice(line, CODE_END, Integer.MAX_VALUE));
+			changes.add(new Change("DUPLICATE_PARAGRAPH_RENAMED", i + 1, header.group(1) + " defined again, renamed " + renamed));
+		}
+	}
+
+	private static final Set<String> STATEMENT_VERBS = new HashSet<String>(Arrays.asList("MOVE", "PERFORM", "DISPLAY", "GO",
+			"IF", "SET", "CALL", "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "COMPUTE", "INITIALIZE", "EXEC", "STRING",
+			"UNSTRING", "INSPECT", "READ", "WRITE", "REWRITE", "OPEN", "CLOSE", "STOP", "EXIT", "CONTINUE", "NEXT",
+			"EVALUATE", "ACCEPT", "CANCEL", "GOBACK", "DELETE", "START", "RETURN", "SORT", "MERGE", "SEARCH"));
+	private static final Set<String> OPEN_OPERATOR = new HashSet<String>(Arrays.asList("AND", "OR", "NOT", "EQUAL", "TO",
+			"THAN", "IS", "GREATER", "LESS", "=", ">", "<", ">=", "<=", "NOT=", "<>"));
+
+	/** True when the text has an AND / OR outside parentheses and quotes. */
+	private static boolean hasTopLevelLogical(String text) {
+		int depth = 0;
+		char quote = 0;
+		for (int i = 0; i < text.length(); i++) {
+			char ch = text.charAt(i);
+			if (quote != 0) {
+				if (ch == quote)
+					quote = 0;
+			} else if (ch == '\'' || ch == '"')
+				quote = ch;
+			else if (ch == '(')
+				depth++;
+			else if (ch == ')')
+				depth--;
+			else if (depth == 0 && Character.isLetter(ch) && (i == 0 || !isNameChar(text.charAt(i - 1)))) {
+				int end = i;
+				while (end < text.length() && isNameChar(text.charAt(end)))
+					end++;
+				String word = text.substring(i, end).toUpperCase(Locale.ROOT);
+				if (word.equals("AND") || word.equals("OR"))
+					return true;
+				i = end - 1;
+			}
+		}
+		return false;
+	}
+
+	private static boolean isNameChar(char ch) {
+		return Character.isLetterOrDigit(ch) || ch == '-' || ch == '_';
+	}
+
+	private static int parenDepth(String text) {
+		int depth = 0;
+		char quote = 0;
+		for (int i = 0; i < text.length(); i++) {
+			char ch = text.charAt(i);
+			if (quote != 0) {
+				if (ch == quote)
+					quote = 0;
+			} else if (ch == '\'' || ch == '"')
+				quote = ch;
+			else if (ch == '(')
+				depth++;
+			else if (ch == ')')
+				depth--;
+		}
+		return depth;
+	}
+
+	private static boolean mentionsVerb(String text) {
+		for (String word : text.toUpperCase(Locale.ROOT).replaceAll("'[^']*'|\"[^\"]*\"", " ").split("[^A-Z0-9-]+"))
+			if (STATEMENT_VERBS.contains(word))
+				return true;
+		return false;
+	}
+
+	private static boolean endsWithOperator(String text) {
+		String[] words = text.trim().toUpperCase(Locale.ROOT).split("\\s+");
+		return words.length > 0 && OPEN_OPERATOR.contains(words[words.length - 1]);
+	}
+
+	/** Puts a rewritten code area back between the untouched sequence columns and the identification area. */
+	private static String withArea(String line, String area) {
+		String tail = slice(line, CODE_END, Integer.MAX_VALUE);
+		if (!tail.isEmpty())
+			area = padEnd(area, CODE_END - CODE_START);
+		return line.substring(0, Math.min(CODE_START, line.length())) + area + tail;
+	}
+
+	/**
+	 * EVALUATE TRUE ... WHEN cond-name AND other (a compound condition starting with a condition
+	 * name) stops the parser at the AND, though it takes the same condition once it sits inside
+	 * NOT ( ... ). The condition is wrapped as NOT (NOT (...)), which means the same.
+	 */
+	private static void wrapCompoundWhenConditions(List<String> lines, List<Change> changes) {
+		boolean inProcedure = false;
+		List<Boolean> openers = new ArrayList<Boolean>(); // true = EVALUATE TRUE, false = anything else (SEARCH ...)
+		for (int i = 0; i < lines.size(); i++) {
+			String area = codeArea(lines.get(i));
+			String upper = area.toUpperCase(Locale.ROOT);
+			if (!inProcedure) {
+				inProcedure = upper.matches("^\\s*PROCEDURE\\s+DIVISION\\b.*");
+				continue;
+			}
+			if (upper.matches(".*\\bEND-(EVALUATE|SEARCH)\\b.*") && !openers.isEmpty())
+				openers.remove(openers.size() - 1);
+			if (upper.matches(".*\\bEVALUATE\\b.*") && !upper.matches(".*\\bEND-EVALUATE\\b.*"))
+				openers.add(upper.matches(".*\\bEVALUATE\\s+TRUE\\s*$") || upper.matches(".*\\bEVALUATE\\s+TRUE\\s*\\.$"));
+			else if (upper.matches(".*\\bSEARCH\\b.*") && !upper.matches(".*\\bEND-SEARCH\\b.*"))
+				openers.add(Boolean.FALSE);
+			if (upper.trim().endsWith("."))
+				openers.clear();
+
+			Matcher when = Pattern.compile("(?i)^(\\s*WHEN\\s+)(.*)$").matcher(area);
+			if (openers.isEmpty() || !openers.get(openers.size() - 1) || !when.matches())
+				continue;
+			String condition = when.group(2).replaceAll("\\s+$", "");
+			if (condition.trim().isEmpty() || condition.trim().toUpperCase(Locale.ROOT).startsWith("OTHER")
+					|| upper.matches(".*\\bALSO\\b.*"))
+				continue;
+			// Following lines that go on with the same condition.
+			int last = i;
+			StringBuilder joined = new StringBuilder(condition);
+			for (int j = i + 1; j < lines.size(); j++) {
+				String next = codeArea(lines.get(j));
+				if (next.trim().isEmpty())
+					continue;
+				String nextUpper = next.trim().toUpperCase(Locale.ROOT);
+				boolean continues = parenDepth(joined.toString()) > 0 || endsWithOperator(joined.toString())
+						|| nextUpper.matches("^(AND|OR)\\b.*") || nextUpper.matches("^(AND|OR)\\(.*");
+				if (!continues)
+					break;
+				joined.append(' ').append(next.trim());
+				last = j;
+			}
+			String text = joined.toString();
+			if (!hasTopLevelLogical(text) || mentionsVerb(text) || parenDepth(text) != 0
+					|| text.toUpperCase(Locale.ROOT).matches("^\\s*NOT\\s*\\(\\s*NOT\\s*\\(.*"))
+				continue;
+			String firstLine = when.group(1) + "NOT (NOT (" + condition;
+			String lastArea = last == i ? firstLine : codeArea(lines.get(last));
+			String closed = lastArea.replaceAll("\\s+$", "") + "))";
+			if (firstLine.length() > CODE_END - CODE_START || closed.length() > CODE_END - CODE_START)
+				continue;
+			if (last == i) {
+				lines.set(i, withArea(lines.get(i), closed));
+			} else {
+				lines.set(i, withArea(lines.get(i), firstLine));
+				lines.set(last, withArea(lines.get(last), closed));
+			}
+			changes.add(new Change("WHEN_CONDITION_WRAPPED", i + 1, "compound WHEN condition wrapped as NOT (NOT (...))"));
+			i = last;
+		}
+	}
+
 	/** ',' / ';' as plain separators (STRING A, B ...) are legal COBOL the grammar rejects. */
 	private static String removeSeparatorCommas(String line, int lineNo, List<Change> changes) {
 		if (isComment(line))
@@ -635,6 +818,8 @@ public final class CicsNormalizer {
 				inSql = false;
 		}
 		removeEmptyInputOutputSection(working, changes);
+		renameDuplicateParagraphs(working, changes);
+		wrapCompoundWhenConditions(working, changes);
 
 		// Code areas joined with '\n', so a block spanning lines is one match and a stream offset
 		// maps straight back to (line, column).
