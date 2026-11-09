@@ -1,47 +1,14 @@
 {
   "corpus": "cobol",
   "date": "2026-11-09",
-  "converterCommit": "ef1294c",
+  "converterCommit": "2bd3817",
   "command": "-project cobol -basePackage jp.co.alsm.batch -scaffold -encoding MS932",
   "compileVerify": "success",
-  "programs": 205,
+  "programs": 117,
   "converted": 101,
-  "failed": 104,
+  "failed": 16,
   "stubbedAfterVerify": 0,
   "topFailureGroups": [
-    {
-      "count": 48,
-      "message": "com.res.cobol.parser.ParseException: Encountered \" <LEVEL_NUMBER> \"02 \"\" at line 2, column 12.",
-      "programs": [
-        "VFILHSH",
-        "VFILHUI",
-        "VFILMMS",
-        "VFILSFM",
-        "VFILSKA"
-      ]
-    },
-    {
-      "count": 31,
-      "message": "com.res.cobol.parser.ParseException: Encountered \" <LEVEL_NUMBER> \"02 \"\" at line 1, column 12.",
-      "programs": [
-        "VFILCM",
-        "VFILNSM",
-        "VFILORG",
-        "VFILSJM",
-        "VFILTCL"
-      ]
-    },
-    {
-      "count": 6,
-      "message": "com.res.cobol.parser.ParseException: Encountered \" <LEVEL_NUMBER> \"02 \"\" at line 3, column 12.",
-      "programs": [
-        "VFILBCL",
-        "VFILCUI",
-        "VFILHJT",
-        "VPARB365",
-        "VTABSKC"
-      ]
-    },
     {
       "count": 3,
       "message": "Unknown Symbol : SKPCH01 (and 1 more)",
@@ -75,13 +42,6 @@
     },
     {
       "count": 1,
-      "message": "com.res.cobol.parser.ParseException: Encountered \" \"exec\" \"EXEC \"\" at line 0, column 9.",
-      "programs": [
-        "VSBA0900"
-      ]
-    },
-    {
-      "count": 1,
       "message": "com.res.cobol.parser.ParseException: Encountered \" \"WITH\" \"WITH \"\" at line 129, column 15. (and 2 more)",
       "programs": [
         "VBSG4090"
@@ -92,6 +52,34 @@
       "message": "com.res.cobol.parser.ParseException: Encountered \" \"zero\" \"ZERO \"\" at line 666, column 15. (and 3 more)",
       "programs": [
         "VBKA4150"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" <ANY_CHAR> \"? \"\" at line 100, column 23. (and 2 more)",
+      "programs": [
+        "VBKE0130"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" <ANY_CHAR> \"? \"\" at line 157, column 24. (and 2 more)",
+      "programs": [
+        "VBSM1760"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "Unknown Symbol : DCLKJH (and 3 more)",
+      "programs": [
+        "VBKF0760"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "Unknown Symbol : DCLKYF (and 2 more)",
+      "programs": [
+        "VBKE0120"
       ]
     }
   ],
