@@ -440,6 +440,13 @@ public class Preprocessor {
 		return null;
 	}
 
+	/** The COPY / EXEC SQL INCLUDE members of this run that no file was found for. */
+	private final java.util.Set<String> missingCopybooks = new java.util.LinkedHashSet<String>();
+
+	public java.util.Set<String> getMissingCopybooks() {
+		return missingCopybooks;
+	}
+
 	private CopyClass checkCopy(String copy_name, boolean fromCopy) throws IOException {
 
 		copy_name = RunTimeUtil.getInstance().stripQuotes((String) copy_name);
@@ -460,6 +467,7 @@ public class Preprocessor {
 					copy_name2 = copy_name + ".COB";
 					copy_file = new File(source_path, copy_name2);
 					if (!copy_file.exists()) {
+						missingCopybooks.add(copy_name);
 						System.err.println("File not found : " + copy_file.getCanonicalPath());
 						if (fromCopy)
 							doCopyTail(null);

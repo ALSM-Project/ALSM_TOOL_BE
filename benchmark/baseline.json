@@ -1,26 +1,17 @@
 {
   "corpus": "cobol",
   "date": "2026-11-09",
-  "converterCommit": "2bd3817",
+  "converterCommit": "ece6ea8",
   "command": "-project cobol -basePackage jp.co.alsm.batch -scaffold -encoding MS932",
   "compileVerify": "success",
   "programs": 117,
-  "converted": 101,
-  "failed": 16,
+  "converted": 108,
+  "failed": 9,
   "stubbedAfterVerify": 0,
   "topFailureGroups": [
     {
-      "count": 3,
-      "message": "Unknown Symbol : SKPCH01 (and 1 more)",
-      "programs": [
-        "VBKA1580",
-        "VBKA4190",
-        "VBMA2160"
-      ]
-    },
-    {
       "count": 2,
-      "message": "Unknown Symbol : DCLSKD (and 5 more)",
+      "message": "Unknown Symbol : DCLSKD (and 5 more) (copybook not found: VDCLSKC, VDCLSKD)",
       "programs": [
         "VSBA2710",
         "VSBA3310"
@@ -35,28 +26,7 @@
     },
     {
       "count": 1,
-      "message": "com.res.cobol.parser.ParseException: Encountered \" \"=\" \"= \"\" at line 442, column 30. (and 2 more)",
-      "programs": [
-        "VBKA1240"
-      ]
-    },
-    {
-      "count": 1,
-      "message": "com.res.cobol.parser.ParseException: Encountered \" \"WITH\" \"WITH \"\" at line 129, column 15. (and 2 more)",
-      "programs": [
-        "VBSG4090"
-      ]
-    },
-    {
-      "count": 1,
-      "message": "com.res.cobol.parser.ParseException: Encountered \" \"zero\" \"ZERO \"\" at line 666, column 15. (and 3 more)",
-      "programs": [
-        "VBKA4150"
-      ]
-    },
-    {
-      "count": 1,
-      "message": "com.res.cobol.parser.ParseException: Encountered \" <ANY_CHAR> \"? \"\" at line 100, column 23. (and 2 more)",
+      "message": "com.res.cobol.parser.ParseException: Encountered \" <ANY_CHAR> \"? \"\" at line 100, column 23. (and 2 more) (copybook not found: VDCLKJH)",
       "programs": [
         "VBKE0130"
       ]
@@ -70,16 +40,30 @@
     },
     {
       "count": 1,
-      "message": "Unknown Symbol : DCLKJH (and 3 more)",
+      "message": "Unknown Symbol : DCLKJH (and 3 more) (copybook not found: VDCLKJH, VDCLSKD)",
       "programs": [
         "VBKF0760"
       ]
     },
     {
       "count": 1,
-      "message": "Unknown Symbol : DCLKYF (and 2 more)",
+      "message": "Unknown Symbol : DCLKYF (and 2 more) (copybook not found: VDCLKYF, VDCLFTM)",
       "programs": [
         "VBKE0120"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "Unknown Symbol : DCLTMF (and 2 more) (copybook not found: VDCLTMF)",
+      "programs": [
+        "VBKA5640"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "Unknown Symbol : N (and 57 more)",
+      "programs": [
+        "VSBA1080"
       ]
     }
   ],
@@ -89,6 +73,7 @@
     "VBKA1210",
     "VBKA1220",
     "VBKA1230",
+    "VBKA1240",
     "VBKA1250",
     "VBKA1520",
     "VBKA1530",
@@ -96,9 +81,13 @@
     "VBKA1550",
     "VBKA1560",
     "VBKA1570",
+    "VBKA1580",
     "VBKA1600",
     "VBKA1610",
+    "VBKA1630",
     "VBKA1640",
+    "VBKA4150",
+    "VBKA4190",
     "VBKA4450",
     "VBKA4460",
     "VBKA4900",
@@ -145,10 +134,12 @@
     "VBKF1350",
     "VBKF1360",
     "VBKF1370",
+    "VBMA2160",
     "VBSG3580",
     "VBSG3590",
     "VBSG3600",
     "VBSG3610",
+    "VBSG4090",
     "VBSG4380",
     "VBSG4390",
     "VBSG4400",

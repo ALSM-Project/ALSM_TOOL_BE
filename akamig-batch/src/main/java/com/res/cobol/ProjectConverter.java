@@ -299,6 +299,15 @@ public class ProjectConverter {
 		return programId.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "");
 	}
 
+	/**
+	 * A program that includes a copybook the project does not have usually fails on an item of
+	 * it ("Unknown Symbol : DCLTMF"); the report says which copybook is missing.
+	 */
+	private static String withMissingCopybooks(String message) {
+		java.util.Set<String> missing = Main.getMissingCopybooks();
+		return missing.isEmpty() ? message : message + " (copybook not found: " + String.join(", ", missing) + ")";
+	}
+
 	private Outcome translate(ProjectIndex.ProgramInfo info, Path javaRoot, String programPackage) {
 		Outcome outcome = new Outcome();
 		outcome.programId = info.programId;
@@ -323,12 +332,13 @@ public class ProjectConverter {
 			// A wrapped Java exception is a translator bug; its trace says where.
 			if (e.getCause() != null && !(e.getCause() instanceof com.res.cobol.parser.ParseException))
 				e.getCause().printStackTrace();
-			fail(outcome, programDir, programPackage, info, e.getMessage(), e.getLine());
+			fail(outcome, programDir, programPackage, info, withMissingCopybooks(e.getMessage()), e.getLine());
 		} catch (Throwable t) {
 			// A translator bug (null pointer, stack overflow) is one program's failure, not the project's.
 			// The trace goes to stderr: it points at the translator, not at the COBOL.
 			t.printStackTrace();
-			fail(outcome, programDir, programPackage, info, t.getClass().getSimpleName() + ": " + t.getMessage(), -1);
+			fail(outcome, programDir, programPackage, info,
+					withMissingCopybooks(t.getClass().getSimpleName() + ": " + t.getMessage()), -1);
 		} finally {
 			RESConfig.getInstance().setOutputDir("");
 		}

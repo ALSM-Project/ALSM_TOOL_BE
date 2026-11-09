@@ -67,6 +67,11 @@ public class Main {
 		return sourceCharset;
 	}
 
+	/** The copybooks the program translated last asked for and could not be found. */
+	public static java.util.Set<String> getMissingCopybooks() {
+		return preprocessor.getMissingCopybooks();
+	}
+
 	/** The charset of -encoding, or null to let SourceEncoding decide per file. */
 	public static java.nio.charset.Charset getExplicitCharset() {
 		return explicitCharset;

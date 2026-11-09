@@ -685,6 +685,226 @@ public final class CicsNormalizer {
 		return line.substring(0, Math.min(CODE_START, line.length())) + area + tail;
 	}
 
+	private static final Pattern PARENTHESIZED_COMPARISON = Pattern.compile(
+			"(?i)\\b(IF|UNTIL|WHEN|AND|OR)(\\s+)([A-Z0-9][A-Z0-9-]*)\\s+((?:IS\\s+)?(?:NOT\\s*)?(?:=|EQUAL(?:\\s+TO)?))\\s*\\(");
+	private static final Set<String> FIGURATIVE = new HashSet<String>(Arrays.asList("ZERO", "ZEROS", "ZEROES", "SPACE",
+			"SPACES", "HIGH-VALUE", "HIGH-VALUES", "LOW-VALUE", "LOW-VALUES", "QUOTE", "QUOTES"));
+
+	/** Splits on blanks outside quotes. */
+	private static List<String> blankSeparated(String text) {
+		List<String> tokens = new ArrayList<String>();
+		StringBuilder token = new StringBuilder();
+		char quote = 0;
+		for (int i = 0; i < text.length(); i++) {
+			char ch = text.charAt(i);
+			if (quote != 0) {
+				token.append(ch);
+				if (ch == quote)
+					quote = 0;
+			} else if (ch == '\'' || ch == '"') {
+				quote = ch;
+				token.append(ch);
+			} else if (Character.isWhitespace(ch)) {
+				if (token.length() > 0) {
+					tokens.add(token.toString());
+					token.setLength(0);
+				}
+			} else
+				token.append(ch);
+		}
+		if (token.length() > 0)
+			tokens.add(token.toString());
+		return tokens;
+	}
+
+	/** Lays words out in code areas of at most width characters; null when a word alone is too long. */
+	private static List<String> wrapWords(List<String> words, int indent, int width) {
+		List<String> out = new ArrayList<String>();
+		StringBuilder line = new StringBuilder(spaces(indent));
+		boolean empty = true;
+		for (String word : words) {
+			if (spaces(indent).length() + word.length() > width)
+				return null;
+			if (!empty && line.length() + 1 + word.length() > width) {
+				out.add(line.toString());
+				line = new StringBuilder(spaces(indent + 3));
+				empty = true;
+			}
+			if (!empty)
+				line.append(' ');
+			line.append(word);
+			empty = false;
+		}
+		out.add(line.toString());
+		return out;
+	}
+
+	/**
+	 * IF subject = ( a OR b ) and IF ZERO = ( a AND b AND c ): an abbreviated comparison whose
+	 * objects are in parentheses, which the grammar does not take. It is written out as
+	 * (subject = a OR subject = b); a figurative subject (ZERO, SPACE ...) goes on the right,
+	 * where the grammar takes it. Only an equality with plain single-word objects is rewritten,
+	 * anything else (subscripts, arithmetic, NOT inside) is left as it is. The statement keeps
+	 * its number of lines when it fits, so later line numbers stay those of the source.
+	 */
+	private static void expandParenthesizedComparisons(List<String> lines, List<Change> changes) {
+		boolean inProcedure = false;
+		for (int i = 0; i < lines.size(); i++) {
+			String area = codeArea(lines.get(i));
+			if (!inProcedure) {
+				inProcedure = area.toUpperCase(Locale.ROOT).matches("^\\s*PROCEDURE\\s+DIVISION\\b.*");
+				continue;
+			}
+			Matcher m = PARENTHESIZED_COMPARISON.matcher(area);
+			if (!m.find())
+				continue;
+			// From the opening parenthesis to its closing one, over as many lines as it takes.
+			StringBuilder inner = new StringBuilder();
+			int depth = 1;
+			int last = -1;
+			int close = -1;
+			char quote = 0;
+			boolean comment = false;
+			for (int j = i; j < lines.size() && j <= i + 20 && close < 0; j++) {
+				comment |= isComment(lines.get(j));
+				String a = codeArea(lines.get(j));
+				for (int k = j == i ? m.end() : 0; k < a.length(); k++) {
+					char ch = a.charAt(k);
+					if (quote != 0) {
+						if (ch == quote)
+							quote = 0;
+					} else if (ch == '\'' || ch == '"')
+						quote = ch;
+					else if (ch == '(')
+						depth++;
+					else if (ch == ')' && --depth == 0) {
+						last = j;
+						close = k;
+						break;
+					}
+					inner.append(ch);
+				}
+				inner.append(' ');
+			}
+			if (close < 0 || comment)
+				continue;
+			List<String> tokens = blankSeparated(inner.toString());
+			boolean plain = tokens.size() >= 3 && tokens.size() % 2 == 1;
+			for (int t = 0; plain && t < tokens.size(); t++) {
+				String word = tokens.get(t).toUpperCase(Locale.ROOT);
+				boolean joiner = word.equals("AND") || word.equals("OR");
+				plain = (t % 2 == 1) == joiner && (joiner || (!OPEN_OPERATOR.contains(word) && word.indexOf('(') < 0
+						&& word.indexOf(')') < 0));
+			}
+			if (!plain)
+				continue;
+			String subject = m.group(3);
+			String operator = m.group(4).trim().replaceAll("\\s+", " ");
+			boolean figurative = FIGURATIVE.contains(subject.toUpperCase(Locale.ROOT));
+			StringBuilder condition = new StringBuilder("(");
+			for (int t = 0; t < tokens.size(); t += 2) {
+				if (t > 0)
+					condition.append(' ').append(tokens.get(t - 1)).append(' ');
+				condition.append(figurative ? tokens.get(t) + " " + operator + " " + subject
+						: subject + " " + operator + " " + tokens.get(t));
+			}
+			condition.append(')');
+			String lastArea = codeArea(lines.get(last));
+			String text = area.substring(0, m.start(3)) + condition + lastArea.substring(close + 1);
+			int indent = area.length() - area.replaceAll("^\\s+", "").length();
+			List<String> wrapped = wrapWords(blankSeparated(text), indent, CODE_END - CODE_START);
+			if (wrapped == null)
+				continue;
+			String head = lines.get(i).substring(0, Math.min(CODE_START, lines.get(i).length()));
+			List<String> replacement = new ArrayList<String>();
+			for (int w = 0; w < wrapped.size(); w++)
+				replacement.add((w == 0 ? head : spaces(CODE_START)) + wrapped.get(w));
+			while (replacement.size() < last - i + 1)
+				replacement.add("");
+			for (int l = last; l >= i; l--)
+				lines.remove(l);
+			lines.addAll(i, replacement);
+			changes.add(new Change("PARENTHESIZED_COMPARISON_EXPANDED", i + 1,
+					subject + " " + operator + " (...) written out as one comparison per object"));
+			i += replacement.size() - 1;
+		}
+	}
+
+	private static final Pattern ISOLATION_CLAUSE = Pattern.compile("(?i)\\bWITH\\s+(?:UR|CS|RS|RR)\\b");
+
+	/**
+	 * DB2 isolation clause (WITH UR, CS, RS, RR) of an EXEC SQL statement: the grammar of the
+	 * statement does not know it. It is blanked out in place, so lines and columns stay as they
+	 * were; the converted program reads with the isolation of the JDBC connection.
+	 */
+	private static void removeIsolationClauses(List<String> lines, List<Change> changes) {
+		boolean inSql = false;
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			String area = codeArea(line);
+			String upper = area.toUpperCase(Locale.ROOT);
+			if (!inSql && upper.matches(".*\\bEXEC\\s+SQL\\b.*"))
+				inSql = true;
+			if (inSql) {
+				Matcher clause = ISOLATION_CLAUSE.matcher(area);
+				StringBuffer blanked = new StringBuffer();
+				boolean found = false;
+				while (clause.find()) {
+					found = true;
+					clause.appendReplacement(blanked, Matcher.quoteReplacement(spaces(clause.end() - clause.start())));
+				}
+				if (found) {
+					clause.appendTail(blanked);
+					lines.set(i, line.substring(0, Math.min(CODE_START, line.length())) + blanked
+							+ slice(line, CODE_END, Integer.MAX_VALUE));
+					changes.add(new Change("SQL_ISOLATION_CLAUSE_REMOVED", i + 1, "WITH UR/CS/RS/RR removed from an EXEC SQL statement"));
+				}
+			}
+			if (inSql && upper.matches(".*\\bEND-EXEC\\b.*"))
+				inSql = false;
+		}
+	}
+
+	private static final Pattern TOP_OF_FORM_NAME = Pattern.compile("(?i)\\bC01\\s+IS\\s+([A-Z][A-Z0-9-]*)");
+
+	/**
+	 * SPECIAL-NAMES: C01 IS name makes name the top-of-form channel, used as WRITE ... AFTER name.
+	 * The translator reads name as a data item and stops at it ("Unknown Symbol"); channel 1 is
+	 * the top of the page, which AFTER ADVANCING PAGE says. Other channels have no such form and
+	 * are left alone.
+	 */
+	private static void rewriteChannelMnemonics(List<String> lines, List<Change> changes) {
+		List<String> names = new ArrayList<String>();
+		int procedure = -1;
+		for (int i = 0; i < lines.size() && procedure < 0; i++) {
+			String area = codeArea(lines.get(i));
+			if (area.toUpperCase(Locale.ROOT).matches("^\\s*PROCEDURE\\s+DIVISION\\b.*")) {
+				procedure = i;
+				break;
+			}
+			Matcher name = TOP_OF_FORM_NAME.matcher(area);
+			while (name.find())
+				names.add(name.group(1).toUpperCase(Locale.ROOT));
+		}
+		if (names.isEmpty() || procedure < 0)
+			return;
+		for (int i = procedure + 1; i < lines.size(); i++) {
+			String line = lines.get(i);
+			String area = codeArea(line);
+			String replaced = area;
+			for (String name : names)
+				replaced = Pattern.compile("(?i)(?<![A-Z0-9-])(AFTER|BEFORE)(\\s+ADVANCING)?\\s+" + Pattern.quote(name)
+						+ "(?![A-Z0-9-])").matcher(replaced).replaceAll("$1 ADVANCING PAGE");
+			if (replaced.equals(area))
+				continue;
+			replaced = replaced.replaceAll("\\s+$", "");
+			if (replaced.length() > CODE_END - CODE_START)
+				continue;
+			lines.set(i, withArea(line, replaced));
+			changes.add(new Change("CHANNEL_MNEMONIC_AS_PAGE", i + 1, "AFTER/BEFORE the C01 mnemonic written as ADVANCING PAGE"));
+		}
+	}
+
 	/**
 	 * EVALUATE TRUE ... WHEN cond-name AND other (a compound condition starting with a condition
 	 * name) stops the parser at the AND, though it takes the same condition once it sits inside
@@ -820,6 +1040,9 @@ public final class CicsNormalizer {
 		removeEmptyInputOutputSection(working, changes);
 		renameDuplicateParagraphs(working, changes);
 		wrapCompoundWhenConditions(working, changes);
+		rewriteChannelMnemonics(working, changes);
+		removeIsolationClauses(working, changes);
+		expandParenthesizedComparisons(working, changes);
 
 		// Code areas joined with '\n', so a block spanning lines is one match and a stream offset
 		// maps straight back to (line, column).
