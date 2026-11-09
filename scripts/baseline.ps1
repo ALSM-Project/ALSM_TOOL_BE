@@ -25,6 +25,8 @@ param(
     [switch]$SkipBuild,
     # Write benchmark/baseline.json.
     [switch]$Save,
+    # Source encoding passed as -encoding; 'auto' leaves it out so the converter detects UTF-8 / MS932 itself.
+    [string]$Encoding = 'MS932',
     # How many failure groups to print and keep.
     [int]$Top = 10
 )
@@ -62,7 +64,7 @@ function ConvertTo-PrettyJson($value, [int]$level = 0) {
 }
 
 $basePackage = 'jp.co.alsm.batch'
-$encoding = 'MS932'
+$encodingArgs = if ($Encoding -eq 'auto') { @() } else { @('-encoding', $Encoding) }
 $jar = Join-Path $root 'target/akaBatch-1.0.jar'
 
 if (-not $SkipBuild) {
@@ -83,7 +85,7 @@ $started = Get-Date
 # The converter's own progress goes to the log; only the milestones are echoed.
 $writer = New-Object IO.StreamWriter($log, $false, (New-Object Text.UTF8Encoding($false)))
 try {
-    & java -jar $jar -project $Corpus -odir $OutDir -basePackage $basePackage -scaffold -encoding $encoding |
+    & java -jar $jar -project $Corpus -odir $OutDir -basePackage $basePackage -scaffold @encodingArgs |
         ForEach-Object {
             $writer.WriteLine($_)
             if ($_ -match '^(Build check|  BUILD|  skipped|  the build|Converted|Done)') { Write-Host $_ }
@@ -128,6 +130,11 @@ Write-Host ''
 Write-Host ('Programs: {0}   Converted: {1}   Failed: {2}   Stubbed after compile verify: {3}' -f `
         $report.programs, $report.converted, $report.failed, $stubbed.Count)
 Write-Host "Compile verify: $verify   (took ${elapsed}s)"
+# U+FFFD in a message is a source decoded with the wrong encoding.
+$replacement = [string][char]0xFFFD
+$wrongEncoding = @($failures | Where-Object { $_.reason.Contains($replacement) }).Count
+$decodedAsMs932 = @($report.warnings | Where-Object { $_ -like '*decoded as MS932*' }).Count
+Write-Host "Failures with U+FFFD (wrong encoding): $wrongEncoding   Files decoded as MS932: $decodedAsMs932"
 Write-Host ''
 Write-Host "Top $Top failure groups (first line of the message):"
 foreach ($g in $groups) {
@@ -147,7 +154,7 @@ if ($Save) {
         corpus             = $Corpus
         date               = (Get-Date -Format 'yyyy-MM-dd')
         converterCommit    = $commit
-        command            = "-project $Corpus -basePackage $basePackage -scaffold -encoding $encoding"
+        command            = ("-project $Corpus -basePackage $basePackage -scaffold " + ($encodingArgs -join ' ')).Trim()
         compileVerify      = $verify
         programs           = [int]$report.programs
         converted          = [int]$report.converted
