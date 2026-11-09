@@ -685,6 +685,41 @@ public final class CicsNormalizer {
 		return line.substring(0, Math.min(CODE_START, line.length())) + area + tail;
 	}
 
+	private static final Pattern ISOLATION_CLAUSE = Pattern.compile("(?i)\\bWITH\\s+(?:UR|CS|RS|RR)\\b");
+
+	/**
+	 * DB2 isolation clause (WITH UR, CS, RS, RR) of an EXEC SQL statement: the grammar of the
+	 * statement does not know it. It is blanked out in place, so lines and columns stay as they
+	 * were; the converted program reads with the isolation of the JDBC connection.
+	 */
+	private static void removeIsolationClauses(List<String> lines, List<Change> changes) {
+		boolean inSql = false;
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			String area = codeArea(line);
+			String upper = area.toUpperCase(Locale.ROOT);
+			if (!inSql && upper.matches(".*\\bEXEC\\s+SQL\\b.*"))
+				inSql = true;
+			if (inSql) {
+				Matcher clause = ISOLATION_CLAUSE.matcher(area);
+				StringBuffer blanked = new StringBuffer();
+				boolean found = false;
+				while (clause.find()) {
+					found = true;
+					clause.appendReplacement(blanked, Matcher.quoteReplacement(spaces(clause.end() - clause.start())));
+				}
+				if (found) {
+					clause.appendTail(blanked);
+					lines.set(i, line.substring(0, Math.min(CODE_START, line.length())) + blanked
+							+ slice(line, CODE_END, Integer.MAX_VALUE));
+					changes.add(new Change("SQL_ISOLATION_CLAUSE_REMOVED", i + 1, "WITH UR/CS/RS/RR removed from an EXEC SQL statement"));
+				}
+			}
+			if (inSql && upper.matches(".*\\bEND-EXEC\\b.*"))
+				inSql = false;
+		}
+	}
+
 	private static final Pattern TOP_OF_FORM_NAME = Pattern.compile("(?i)\\bC01\\s+IS\\s+([A-Z][A-Z0-9-]*)");
 
 	/**
@@ -861,6 +896,7 @@ public final class CicsNormalizer {
 		renameDuplicateParagraphs(working, changes);
 		wrapCompoundWhenConditions(working, changes);
 		rewriteChannelMnemonics(working, changes);
+		removeIsolationClauses(working, changes);
 
 		// Code areas joined with '\n', so a block spanning lines is one match and a stream offset
 		// maps straight back to (line, column).

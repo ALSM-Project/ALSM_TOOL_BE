@@ -25,7 +25,7 @@ class CorpusFailureCasesTest {
 	Path temp;
 
 	@ParameterizedTest(name = "{0}")
-	@ValueSource(strings = { "skpch01.cob" })
+	@ValueSource(strings = { "skpch01.cob", "with-ur.cob" })
 	void converts(String resource) throws Exception {
 		Path project = temp.resolve("project");
 		Files.createDirectories(project);
