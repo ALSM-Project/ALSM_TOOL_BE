@@ -1784,10 +1784,34 @@ public class Cobol2Java extends DepthFirstVisitor {
 	}
 
 	
+	/**
+	 * These statements have no translation yet. A program holding one is a failure with a reason,
+	 * not a converted program that quietly does nothing where the statement stood.
+	 */
+	private void unsupportedStatement(Node n, String statement) {
+		reportError(n, statement + " is not supported by the converter yet");
+	}
+
+	@Override
+	public void visit(SortStatement n) {
+		unsupportedStatement(n, "SORT");
+	}
+
+	@Override
+	public void visit(MergeStatement n) {
+		unsupportedStatement(n, "MERGE");
+	}
+
+	@Override
+	public void visit(ReleaseStatement n) {
+		unsupportedStatement(n, "RELEASE");
+	}
+
 	@Override
 	public void visit(ReturnStatement n) {
-	
+		unsupportedStatement(n, "RETURN");
 	}
+
 	private boolean doingArithmeticExpression = false;
 	@Override
 	public void visit(ArithmeticExpression n) {
