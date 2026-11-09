@@ -65,20 +65,12 @@ class ProjectEncodingTest {
 		return project;
 	}
 
-	/** Runs the converter in its own JVM (it keeps its state in singletons) and returns the report. */
+	private int runs;
+
 	private com.jayway.jsonpath.DocumentContext convert(Path project, String... extra) throws Exception {
-		Path out = temp.resolve("out" + extra.length);
-		List<String> command = new ArrayList<String>(Arrays.asList(
-				Paths.get(System.getProperty("java.home"), "bin", "java").toString(), "-cp",
-				Paths.get("target", "classes").toAbsolutePath().toString(), "com.res.cobol.Main", "-project",
-				project.toString(), "-odir", out.toString(), "-basePackage", "t.p"));
-		command.addAll(Arrays.asList(extra));
-		File log = temp.resolve("run" + extra.length + ".log").toFile();
-		Process process = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(log).start();
-		assertTrue(process.waitFor(2, TimeUnit.MINUTES), "the converter did not finish");
-		String output = new String(Files.readAllBytes(log.toPath()), StandardCharsets.UTF_8);
-		assertEquals(0, process.exitValue(), output);
-		return JsonPath.parse(out.resolve("conversion_report.json").toFile());
+		Path work = temp.resolve("run" + runs++);
+		Files.createDirectories(work);
+		return ConverterRun.convert(project, work, extra);
 	}
 
 	@Test
