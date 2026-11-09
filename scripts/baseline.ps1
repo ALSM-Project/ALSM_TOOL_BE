@@ -33,6 +33,34 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# Windows PowerShell 5.1's ConvertTo-Json aligns values with runs of blanks and escapes ' < > &,
+# which makes every later diff of the baseline noisy; this writes plain two-space JSON.
+function ConvertTo-PrettyJson($value, [int]$level = 0) {
+    $pad = '  ' * ($level + 1)
+    $close = '  ' * $level
+    if ($null -eq $value) { return 'null' }
+    if ($value -is [System.Collections.IDictionary]) {
+        if ($value.Count -eq 0) { return '{}' }
+        $items = foreach ($key in $value.Keys) {
+            $pad + (ConvertTo-PrettyJson ([string]$key)) + ': ' + (ConvertTo-PrettyJson $value[$key] ($level + 1))
+        }
+        return "{`n" + ($items -join ",`n") + "`n$close}"
+    }
+    if ($value -is [string]) {
+        $bs = [string][char]92
+        $text = $value.Replace($bs, $bs + $bs).Replace('"', $bs + '"').Replace("`r", $bs + 'r').Replace("`n", $bs + 'n').Replace("`t", $bs + 't')
+        return '"' + $text + '"'
+    }
+    if ($value -is [bool]) { return $value.ToString().ToLowerInvariant() }
+    if ($value -is [System.Collections.IEnumerable]) {
+        $list = @($value)
+        if ($list.Count -eq 0) { return '[]' }
+        $items = foreach ($item in $list) { $pad + (ConvertTo-PrettyJson $item ($level + 1)) }
+        return "[`n" + ($items -join ",`n") + "`n$close]"
+    }
+    return [string]$value
+}
+
 $basePackage = 'jp.co.alsm.batch'
 $encoding = 'MS932'
 $jar = Join-Path $root 'target/akaBatch-1.0.jar'
@@ -113,7 +141,8 @@ if ($verify -ne 'success') {
 if ($Save) {
     if ($verify -ne 'success') { throw "not saving a baseline measured without a finished compile verify ($verify)" }
     $commit = (& git rev-parse --short HEAD).Trim()
-    if (& git status --porcelain) { $commit += '-dirty' }
+    # Only changes to tracked files make the measurement "dirty"; new files do not touch the converter.
+    if (& git status --porcelain --untracked-files=no) { $commit += '-dirty' }
     $baseline = [ordered]@{
         corpus             = $Corpus
         date               = (Get-Date -Format 'yyyy-MM-dd')
@@ -127,10 +156,7 @@ if ($Save) {
         topFailureGroups   = $groups
         convertedPrograms  = @($report.succeeded | ForEach-Object { $_.programId } | Sort-Object)
     }
-    $json = $baseline | ConvertTo-Json -Depth 6
-    # Windows PowerShell escapes the characters ' < > & as backslash-u sequences; keep the file readable.
-    $escape = [string][char]92 + 'u00'
-    $json = $json.Replace($escape + '27', "'").Replace($escape + '3c', '<').Replace($escape + '3e', '>').Replace($escape + '26', '&')
+    $json = ConvertTo-PrettyJson $baseline
     $target = Join-Path $root 'benchmark/baseline.json'
     [IO.File]::WriteAllText($target, $json + "`n", (New-Object Text.UTF8Encoding($false)))
     Write-Host ''
