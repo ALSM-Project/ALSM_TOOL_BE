@@ -132,7 +132,7 @@ Write-Host ('Programs: {0}   Converted: {1}   Failed: {2}   Stubbed after compil
 Write-Host "Compile verify: $verify   (took ${elapsed}s)"
 # U+FFFD in a message is a source decoded with the wrong encoding.
 $replacement = [string][char]0xFFFD
-$wrongEncoding = @($failures | Where-Object { $_.reason.Contains($replacement) }).Count
+$wrongEncoding = @($failures | Where-Object { $_.reason.Contains($replacement) -or $_.reason -like '*ufffd*' }).Count
 $decodedAsMs932 = @($report.warnings | Where-Object { $_ -like '*decoded as MS932*' }).Count
 Write-Host "Failures with U+FFFD (wrong encoding): $wrongEncoding   Files decoded as MS932: $decodedAsMs932"
 Write-Host ''
