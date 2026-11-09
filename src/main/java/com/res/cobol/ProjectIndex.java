@@ -41,6 +41,8 @@ public class ProjectIndex {
 			"copylib", "cpy", "inc");
 
 	private static final Pattern PROGRAM_ID = Pattern.compile("(?i)\\bPROGRAM-ID\\s*\\.?\\s+([A-Za-z0-9][A-Za-z0-9_\\-]*)");
+	/** The division that opens every program, at the start of a line. */
+	private static final Pattern DIVISION_HEADER = Pattern.compile("(?im)^\\s*(?:IDENTIFICATION|ID)\\s+DIVISION\\b");
 	private static final Pattern STATIC_CALL = Pattern.compile("(?i)\\bCALL\\s+['\"]([^'\"]+)['\"]");
 	private static final Pattern DYNAMIC_CALL = Pattern.compile("(?i)\\bCALL\\s+([A-Za-z][A-Za-z0-9_\\-]*)");
 
@@ -136,17 +138,78 @@ public class ProjectIndex {
 		return false;
 	}
 
+	/**
+	 * A file is a program when its code has an IDENTIFICATION (ID) DIVISION or a PROGRAM-ID, a
+	 * copybook when it has neither: what it holds decides, not its extension. A copybook folder
+	 * often keeps its members as .COB, which used to index them as programs.
+	 */
 	private void classify(Path file) {
 		String ext = extensionOf(file);
-		if (PROGRAM_EXTENSIONS.contains(ext)) {
+		boolean programName = PROGRAM_EXTENSIONS.contains(ext);
+		boolean copybookName = COPYBOOK_EXTENSIONS.contains(ext) || (ext.isEmpty() && inCopybookFolder(file));
+		if (!programName && !copybookName)
+			return;
+		boolean program;
+		try {
+			program = holdsProgram(file);
+		} catch (IOException e) {
+			warnings.add("Cannot read " + file + ": " + e.getMessage());
+			program = programName; // unreadable: keep what the name says
+		}
+		// A copybook in a copybook folder is the normal case; anything else against its name is worth a note.
+		if (program != programName && !(!program && inCopybookFolder(file)))
+			warnings.add(root.relativize(file.toAbsolutePath().normalize()).toString().replace('\\', '/') + " is indexed as a "
+					+ (program ? "program (it has a PROGRAM-ID)" : "copybook (it has no PROGRAM-ID)")
+					+ " although its name suggests a " + (programName ? "program" : "copybook"));
+		if (program) {
 			programFiles.add(file);
 			register(sourceByName, baseOf(file), file);
 			register(sourceByName, file.getFileName().toString(), file);
-		} else if (COPYBOOK_EXTENSIONS.contains(ext) || (ext.isEmpty() && inCopybookFolder(file))) {
+		} else {
 			copybookFiles.add(file);
 			register(copybooks, baseOf(file), file);
 			register(copybooks, file.getFileName().toString(), file);
 		}
+	}
+
+	/** True when the code of the file (comment lines left out) opens a program. */
+	private boolean holdsProgram(Path file) throws IOException {
+		// Decoded leniently with the charset of the run: a stray byte of a Shift-JIS comment
+		// must not decide what the file is.
+		List<String> lines = Arrays.asList(new String(Files.readAllBytes(file), charset).split("\r\n|\r|\n", -1));
+		return hasProgramHeader(activeSource(lines)) || hasProgramHeader(freeFormSource(lines));
+	}
+
+	private static boolean hasProgramHeader(String code) {
+		if (DIVISION_HEADER.matcher(code).find())
+			return true;
+		Matcher id = PROGRAM_ID.matcher(code);
+		while (id.find())
+			// A data item may be called PROGRAM-ID; the paragraph starts its line.
+			if (startsLine(code, id.start()))
+				return true;
+		return false;
+	}
+
+	private static boolean startsLine(String text, int index) {
+		for (int i = index - 1; i >= 0 && text.charAt(i) != '\n'; i--)
+			if (!Character.isWhitespace(text.charAt(i)))
+				return false;
+		return true;
+	}
+
+	/** Like activeSource, without the fixed-format columns: a free-format program starts in column 1. */
+	private static String freeFormSource(List<String> lines) {
+		StringBuilder out = new StringBuilder();
+		for (String line : lines) {
+			if (line.length() > 6 && (line.charAt(6) == '*' || line.charAt(6) == '/'))
+				continue;
+			if (line.trim().startsWith("*"))
+				continue;
+			int comment = line.indexOf("*>");
+			out.append(comment >= 0 ? line.substring(0, comment) : line).append('\n');
+		}
+		return out.toString();
 	}
 
 	private void register(Map<String, Path> map, String name, Path file) {
@@ -168,8 +231,12 @@ public class ProjectIndex {
 
 	/** Source text without comment lines, so a commented-out CALL is not counted. */
 	private String readActiveSource(Path file) throws IOException {
+		return activeSource(Files.readAllLines(file, charset));
+	}
+
+	private static String activeSource(List<String> lines) {
 		StringBuilder out = new StringBuilder();
-		for (String line : Files.readAllLines(file, charset)) {
+		for (String line : lines) {
 			if (line.length() > 6 && (line.charAt(6) == '*' || line.charAt(6) == '/'))
 				continue;
 			// Fixed format: columns 1-6 and 73-80 are sequence numbers, not code. Without this a
