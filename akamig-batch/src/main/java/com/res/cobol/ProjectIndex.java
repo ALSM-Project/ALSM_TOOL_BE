@@ -84,7 +84,10 @@ public class ProjectIndex {
 		return Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(values)));
 	}
 
-	/** Walks the tree below root without limit on depth and builds the index. */
+	/**
+	 * Walks the tree below root without limit on depth and builds the index. charset is the
+	 * -encoding of the run, or null to read each file as UTF-8 or, when it is not valid UTF-8, MS932.
+	 */
 	public static ProjectIndex scan(Path root, Charset charset) throws IOException {
 		final ProjectIndex index = new ProjectIndex(root.toAbsolutePath().normalize(), charset);
 		Files.walkFileTree(index.root, new SimpleFileVisitor<Path>() {
@@ -174,9 +177,9 @@ public class ProjectIndex {
 
 	/** True when the code of the file (comment lines left out) opens a program. */
 	private boolean holdsProgram(Path file) throws IOException {
-		// Decoded leniently with the charset of the run: a stray byte of a Shift-JIS comment
-		// must not decide what the file is.
-		List<String> lines = Arrays.asList(new String(Files.readAllBytes(file), charset).split("\r\n|\r|\n", -1));
+		// Decoded the way the run decodes everything (-encoding, else UTF-8 or MS932 by content)
+		// and never strictly: a stray byte of a Shift-JIS comment must not decide what the file is.
+		List<String> lines = SourceEncoding.lines(file, charset);
 		return hasProgramHeader(activeSource(lines)) || hasProgramHeader(freeFormSource(lines));
 	}
 
@@ -231,7 +234,7 @@ public class ProjectIndex {
 
 	/** Source text without comment lines, so a commented-out CALL is not counted. */
 	private String readActiveSource(Path file) throws IOException {
-		return activeSource(Files.readAllLines(file, charset));
+		return activeSource(SourceEncoding.lines(file, charset));
 	}
 
 	private static String activeSource(List<String> lines) {
