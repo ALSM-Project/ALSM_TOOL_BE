@@ -1,0 +1,201 @@
+{
+  "corpus": "cobol",
+  "date": "2026-11-09",
+  "converterCommit": "ef1294c",
+  "command": "-project cobol -basePackage jp.co.alsm.batch -scaffold -encoding MS932",
+  "compileVerify": "success",
+  "programs": 205,
+  "converted": 101,
+  "failed": 104,
+  "stubbedAfterVerify": 0,
+  "topFailureGroups": [
+    {
+      "count": 48,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" <LEVEL_NUMBER> \"02 \"\" at line 2, column 12.",
+      "programs": [
+        "VFILHSH",
+        "VFILHUI",
+        "VFILMMS",
+        "VFILSFM",
+        "VFILSKA"
+      ]
+    },
+    {
+      "count": 31,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" <LEVEL_NUMBER> \"02 \"\" at line 1, column 12.",
+      "programs": [
+        "VFILCM",
+        "VFILNSM",
+        "VFILORG",
+        "VFILSJM",
+        "VFILTCL"
+      ]
+    },
+    {
+      "count": 6,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" <LEVEL_NUMBER> \"02 \"\" at line 3, column 12.",
+      "programs": [
+        "VFILBCL",
+        "VFILCUI",
+        "VFILHJT",
+        "VPARB365",
+        "VTABSKC"
+      ]
+    },
+    {
+      "count": 3,
+      "message": "Unknown Symbol : SKPCH01 (and 1 more)",
+      "programs": [
+        "VBKA1580",
+        "VBKA4190",
+        "VBMA2160"
+      ]
+    },
+    {
+      "count": 2,
+      "message": "Unknown Symbol : DCLSKD (and 5 more)",
+      "programs": [
+        "VSBA2710",
+        "VSBA3310"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" \"(\" \"( \"\" at line 147, column 54. (and 1 more)",
+      "programs": [
+        "VSBA0430"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" \"=\" \"= \"\" at line 442, column 30. (and 2 more)",
+      "programs": [
+        "VBKA1240"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" \"exec\" \"EXEC \"\" at line 0, column 9.",
+      "programs": [
+        "VSBA0900"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" \"WITH\" \"WITH \"\" at line 129, column 15. (and 2 more)",
+      "programs": [
+        "VBSG4090"
+      ]
+    },
+    {
+      "count": 1,
+      "message": "com.res.cobol.parser.ParseException: Encountered \" \"zero\" \"ZERO \"\" at line 666, column 15. (and 3 more)",
+      "programs": [
+        "VBKA4150"
+      ]
+    }
+  ],
+  "convertedPrograms": [
+    "PILOTPRT",
+    "VBKA1200",
+    "VBKA1210",
+    "VBKA1220",
+    "VBKA1230",
+    "VBKA1250",
+    "VBKA1520",
+    "VBKA1530",
+    "VBKA1540",
+    "VBKA1550",
+    "VBKA1560",
+    "VBKA1570",
+    "VBKA1600",
+    "VBKA1610",
+    "VBKA1640",
+    "VBKA4450",
+    "VBKA4460",
+    "VBKA4900",
+    "VBKA4910",
+    "VBKA4920",
+    "VBKA4930",
+    "VBKA4950",
+    "VBKA4960",
+    "VBKA4970",
+    "VBKA4980",
+    "VBKA4990",
+    "VBKA5000",
+    "VBKA5010",
+    "VBKA5020",
+    "VBKA5030",
+    "VBKA5040",
+    "VBKA5050",
+    "VBKA5060",
+    "VBKA5070",
+    "VBKA5080",
+    "VBKA5090",
+    "VBKA5100",
+    "VBKA5110",
+    "VBKA5210",
+    "VBKA5650",
+    "VBKA5730",
+    "VBKA5740",
+    "VBKA6400",
+    "VBKA7090",
+    "VBKA7100",
+    "VBKA7110",
+    "VBKE0100",
+    "VBKE0110",
+    "VBKE1250",
+    "VBKF0750",
+    "VBKF0770",
+    "VBKF0780",
+    "VBKF0810",
+    "VBKF0820",
+    "VBKF1310",
+    "VBKF1320",
+    "VBKF1330",
+    "VBKF1340",
+    "VBKF1350",
+    "VBKF1360",
+    "VBKF1370",
+    "VBSG3580",
+    "VBSG3590",
+    "VBSG3600",
+    "VBSG3610",
+    "VBSG4380",
+    "VBSG4390",
+    "VBSG4400",
+    "VSBA0020",
+    "VSBA0040",
+    "VSBA0050",
+    "VSBA0070",
+    "VSBA0280",
+    "VSBA0340",
+    "VSBA0350",
+    "VSBA0410",
+    "VSBA0480",
+    "VSBA0490",
+    "VSBA0560",
+    "VSBA0890",
+    "VSBA1090",
+    "VSBA1120",
+    "VSBA1130",
+    "VSBA1200",
+    "VSBA1250",
+    "VSBA1260",
+    "VSBA1320",
+    "VSBA1970",
+    "VSBA2050",
+    "VSBA2270",
+    "VSBA2280",
+    "VSBA2290",
+    "VSBA2320",
+    "VSBA2340",
+    "VSBA2370",
+    "VSBA2380",
+    "VSBA2720",
+    "VSBA2730",
+    "VSBA2960",
+    "VSBA3650",
+    "VSBABEND"
+  ]
+}
