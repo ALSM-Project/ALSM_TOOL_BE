@@ -159,6 +159,14 @@ public class SymbolUtil {
 			ClassFile.println("public void " + setter + "(" + type + " value) {");
 			ClassFile.println("	this." + name + " = value;");
 			ClassFile.println("}");
+			if (type.equals("String")) {
+				// ACCEPT into a PIC X item reads a char. Without this overload Java widens it to int
+				// and the field receives "68" for 'D'.
+				ClassFile.println("");
+				ClassFile.println("public void " + setter + "(char value) {");
+				ClassFile.println("	this." + name + " = String.valueOf(value);");
+				ClassFile.println("}");
+			}
 			for (String other : PLAIN_TYPES) {
 				if (other.equals(type))
 					continue;

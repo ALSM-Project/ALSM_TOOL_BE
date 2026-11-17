@@ -458,8 +458,20 @@ public class ProjectConverter {
 			fields.append("\n  private ").append(type).append(' ').append(name).append(init).append(";\n");
 			if (!type.equals("String"))
 				fields.append(numericSetters(type, name));
+			else
+				fields.append(textSetters(name));
 		}
 		return fields.toString();
+	}
+
+	/**
+	 * ACCEPT into a PIC X item hands the setter a char, which Java would widen to int (or refuse for a
+	 * String-only setter). Lombok writes no setter once one of that name exists, so both are written here.
+	 */
+	private static String textSetters(String name) {
+		String setter = "set" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+		return "\n  public void " + setter + "(String value) {\n    this." + name + " = value;\n  }\n"
+				+ "\n  public void " + setter + "(char value) {\n    this." + name + " = String.valueOf(value);\n  }\n";
 	}
 
 	/**
