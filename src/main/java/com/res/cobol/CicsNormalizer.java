@@ -865,6 +865,55 @@ public final class CicsNormalizer {
 		}
 	}
 
+	private static final Pattern LEVEL_78 = Pattern.compile(
+			"(?i)^(\\s*)78\\s+([A-Z0-9][A-Z0-9-]*)\\s+VALUE\\s+(?:IS\\s+)?('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|[+-]?\\d+(?:\\.\\d+)?)\\s*\\.\\s*$");
+
+	/**
+	 * 78 NAME VALUE literal. is a constant of Micro Focus and others, not of the grammar: the
+	 * translator takes the name for a group and writes a broken Model. It is written as an elementary
+	 * item with the value (01 NAME PIC X(n) VALUE literal.), which a MOVE or a comparison reads the
+	 * same way. The item can be changed by the program, which a constant cannot; the programs seen
+	 * only read them. A 78 with an expression as its value is left as it is.
+	 */
+	private static void rewriteLevel78Constants(List<String> lines, List<Change> changes) {
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			String area = codeArea(line);
+			Matcher m = LEVEL_78.matcher(area);
+			if (!m.matches())
+				continue;
+			String literal = m.group(3);
+			String picture;
+			if (literal.startsWith("'") || literal.startsWith("\"")) {
+				char quote = literal.charAt(0);
+				String body = literal.substring(1, literal.length() - 1).replace("" + quote + quote, "" + quote);
+				picture = "X(" + Math.max(1, body.length()) + ")";
+			} else {
+				boolean signed = literal.startsWith("-") || literal.startsWith("+");
+				String digits = signed ? literal.substring(1) : literal;
+				int point = digits.indexOf('.');
+				String whole = point < 0 ? digits : digits.substring(0, point);
+				picture = (signed ? "S" : "") + "9(" + whole.length() + ")"
+						+ (point < 0 ? "" : "V9(" + (digits.length() - point - 1) + ")");
+			}
+			String text = m.group(1) + "01 " + m.group(2) + " PIC " + picture + " VALUE " + literal + ".";
+			int width = CODE_END - CODE_START;
+			String prefix = line.substring(0, Math.min(CODE_START, line.length()));
+			if (text.length() <= width) {
+				lines.set(i, prefix + padEnd(text, width) + slice(line, CODE_END, Integer.MAX_VALUE));
+			} else {
+				List<String> wrapped = wrapWords(blankSeparated(text), m.group(1).length(), width);
+				if (wrapped == null)
+					continue;
+				lines.set(i, prefix + wrapped.get(0));
+				for (int k = 1; k < wrapped.size(); k++)
+					lines.add(i + k, spaces(CODE_START) + wrapped.get(k));
+				i += wrapped.size() - 1;
+			}
+			changes.add(new Change("LEVEL_78_CONSTANT_REWRITTEN", i + 1, "78 " + m.group(2) + " written as 01 " + m.group(2)));
+		}
+	}
+
 	/**
 	 * Marks a FUNCTION TRIM call that was rewritten to FUNCTION REVERSE: the first argument is this
 	 * literal, which Cobol2Java drops while it writes trim() for reverse().
@@ -1137,6 +1186,7 @@ public final class CicsNormalizer {
 		removeIsolationClauses(working, changes);
 		expandParenthesizedComparisons(working, changes);
 		rewriteTrimFunction(working, changes);
+		rewriteLevel78Constants(working, changes);
 
 		// Code areas joined with '\n', so a block spanning lines is one match and a stream offset
 		// maps straight back to (line, column).
