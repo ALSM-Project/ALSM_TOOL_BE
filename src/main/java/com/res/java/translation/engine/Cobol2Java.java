@@ -646,6 +646,12 @@ public class Cobol2Java extends DepthFirstVisitor {
 													int argsAt=litC.literal.indexOf("(");
 													String arguments=argsAt<0?"()":litC.literal.substring(argsAt);
 													String function=SymbolConstants.getFunction(idx);
+					// FUNCTION TRIM(x) reaches here as REVERSE(marker, x) (CicsNormalizer.rewriteTrimFunction).
+					String trimMarker="(\""+com.res.cobol.CicsNormalizer.TRIM_MARKER+"\",";
+					if(function.equals("reverse")&&arguments.startsWith(trimMarker)) {
+						function="trim";
+						arguments="("+arguments.substring(trimMarker.length());
+					}
 													// HIGH-VALUES / LOW-VALUES travel through the same table.
 													if(function.equals("Constant.MAX_VALUE")) function="highValues";
 													else if(function.equals("Constant.MIN_VALUE")) function="lowValues";

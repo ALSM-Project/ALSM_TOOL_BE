@@ -865,6 +865,99 @@ public final class CicsNormalizer {
 		}
 	}
 
+	/**
+	 * Marks a FUNCTION TRIM call that was rewritten to FUNCTION REVERSE: the first argument is this
+	 * literal, which Cobol2Java drops while it writes trim() for reverse().
+	 */
+	public static final String TRIM_MARKER = "ALSM$TRIM";
+
+	private static final Pattern TRIM_CALL = Pattern.compile("(?i)\\bFUNCTION\\s+TRIM\\s*\\(");
+
+	private static boolean insideLiteral(String text, int position) {
+		char quote = 0;
+		for (int i = 0; i < position && i < text.length(); i++) {
+			char ch = text.charAt(i);
+			if (quote != 0) {
+				if (ch == quote)
+					quote = 0;
+			} else if (ch == '\'' || ch == '"')
+				quote = ch;
+		}
+		return quote != 0;
+	}
+
+	/** Index of the parenthesis closing the one opened at open, or -1 when the line ends first. */
+	private static int closingParenthesis(String text, int open) {
+		int depth = 0;
+		char quote = 0;
+		for (int i = open; i < text.length(); i++) {
+			char ch = text.charAt(i);
+			if (quote != 0) {
+				if (ch == quote)
+					quote = 0;
+			} else if (ch == '\'' || ch == '"')
+				quote = ch;
+			else if (ch == '(')
+				depth++;
+			else if (ch == ')' && --depth == 0)
+				return i;
+		}
+		return -1;
+	}
+
+	/**
+	 * FUNCTION TRIM(x): the scanner of the translator has no TRIM among its function names and stops
+	 * at it. The call is written as FUNCTION REVERSE(marker x), a function it knows, and Cobol2Java
+	 * turns the marker back into trim(x). TRIM(x LEADING) and TRIM(x TRAILING) are left as they are.
+	 * The longer text can push a line past column 72, so such a line is laid out again.
+	 */
+	private static void rewriteTrimFunction(List<String> lines, List<Change> changes) {
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			String area = codeArea(line);
+			if (!area.toUpperCase(Locale.ROOT).contains("TRIM"))
+				continue;
+			StringBuilder out = new StringBuilder();
+			int position = 0;
+			boolean found = false;
+			Matcher call = TRIM_CALL.matcher(area);
+			while (call.find()) {
+				if (insideLiteral(area, call.start()))
+					continue;
+				int close = closingParenthesis(area, call.end() - 1);
+				String inner = close < 0 ? area.substring(call.end()) : area.substring(call.end(), close);
+				if (inner.trim().toUpperCase(Locale.ROOT).matches("(?s).*\\b(LEADING|TRAILING)$"))
+					continue;
+				out.append(area, position, call.start());
+				out.append("FUNCTION REVERSE(\"").append(TRIM_MARKER).append("\" ");
+				position = call.end();
+				found = true;
+			}
+			if (!found)
+				continue;
+			out.append(area.substring(position));
+			String rewritten = out.toString();
+			String prefix = line.substring(0, Math.min(CODE_START, line.length()));
+			int width = CODE_END - CODE_START;
+			String trimmedRight = rewritten.replaceAll("\\s+$", "");
+			if (trimmedRight.length() <= width) {
+				lines.set(i, prefix + padEnd(trimmedRight, width) + slice(line, CODE_END, Integer.MAX_VALUE));
+			} else {
+				int indent = 0;
+				while (indent < rewritten.length() && rewritten.charAt(indent) == ' ')
+					indent++;
+				List<String> wrapped = wrapWords(blankSeparated(rewritten), indent, width);
+				if (wrapped == null)
+					continue; // a word alone is too long: leave the line, the scanner will say where
+				lines.set(i, prefix + wrapped.get(0));
+				for (int k = 1; k < wrapped.size(); k++)
+					lines.add(i + k, spaces(CODE_START) + wrapped.get(k));
+				i += wrapped.size() - 1;
+			}
+			changes.add(new Change("FUNCTION_TRIM_REWRITTEN", i + 1, "FUNCTION TRIM written as FUNCTION REVERSE with a marker"));
+		}
+	}
+
 	private static final Pattern TOP_OF_FORM_NAME = Pattern.compile("(?i)\\bC01\\s+IS\\s+([A-Z][A-Z0-9-]*)");
 
 	/**
@@ -1043,6 +1136,7 @@ public final class CicsNormalizer {
 		rewriteChannelMnemonics(working, changes);
 		removeIsolationClauses(working, changes);
 		expandParenthesizedComparisons(working, changes);
+		rewriteTrimFunction(working, changes);
 
 		// Code areas joined with '\n', so a block spanning lines is one match and a stream offset
 		// maps straight back to (line, column).

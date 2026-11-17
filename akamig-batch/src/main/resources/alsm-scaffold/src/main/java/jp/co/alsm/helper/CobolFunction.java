@@ -58,6 +58,19 @@ public final class CobolFunction {
 		return value.toLowerCase();
 	}
 
+	/** FUNCTION TRIM: the value without its leading and trailing spaces; all spaces leave one space. */
+	public static String trim(String value) {
+		if (value == null)
+			return " ";
+		int start = 0;
+		int end = value.length();
+		while (start < end && value.charAt(start) == ' ')
+			start++;
+		while (end > start && value.charAt(end - 1) == ' ')
+			end--;
+		return start == end ? " " : value.substring(start, end);
+	}
+
 	public static String reverse(String value) {
 		return new StringBuilder(value).reverse().toString();
 	}
