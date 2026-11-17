@@ -125,8 +125,13 @@ public class ProjectConverter {
 							projectRoot.relativize(file).toString().replace('\\', '/')))
 						if (encodingNotes.add(note))
 							System.out.println("  warning: " + note);
-					String text = decoded.text;
+					// >>SOURCE FORMAT FREE: the scanner reads fixed format only, so the file is rewritten first.
+					FreeFormat.Result fixed = FreeFormat.toFixed(decoded.text);
+					String text = fixed.source;
 					CicsNormalizer.Result result = CicsNormalizer.normalize(text);
+					if (fixed.changedLines > 0)
+						result.changes.add(new CicsNormalizer.Change("FREE_FORMAT_REWRITTEN", 0,
+								"free-format source written as fixed format (" + fixed.changedLines + " lines)"));
 					hoists.putAll(result.hoists);
 					needsSupport |= result.needsSupportCopybook;
 					if (!result.changes.isEmpty()) {
